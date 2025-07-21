@@ -13,23 +13,20 @@ DB_FILE    = "/app/crm_owners.json"
 
 # ---------- helper ---------- #
 def load_states_counties():
-    if not os.path.exists(CSV_PATH):
-        print("CSV file not found")
-        return
     data = {}
     with open(CSV_PATH, newline='') as f:
-        reader = csv.DictReader(f)
+        reader = csv.DictReader(f, delimiter=';')
         for row in reader:
-            key = row['state_FIPS']
+            key = row['StateFIPS']
             if key not in data:
                 data[key] = {
                     "state_FIPS": int(key),
-                    "state_name": row['state_name'],
+                    "state_name": row['State'],
                     "counties": []
                 }
             data[key]["counties"].append({
-                "county_name": row['county_name'],
-                "county_FIPS": int(row['county_FIPS'])
+                "county_name": row['County'],
+                "county_FIPS": int(row['CountyFIPS'])
             })
     return list(data.values())
 

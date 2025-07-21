@@ -1,10 +1,13 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, EmailStr
 import csv, uuid, os, datetime, json
+import pathlib, os
+
 
 app = FastAPI()
 
-CSV_PATH   = "/app/backend/states_counties.csv"
+CSV_PATH = pathlib.Path(__file__).with_name(os.getenv("CSV_PATH", "states_counties.csv"))
+
 DB_FILE    = "/app/crm_owners.json"
 
 # ---------- helper ---------- #

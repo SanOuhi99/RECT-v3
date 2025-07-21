@@ -1,0 +1,16 @@
+{
+  "name": "frontend",
+  "scripts": {
+    "build": "npm run build-vite",
+    "build-vite": "vite build",
+    "dev": "vite"
+  },
+  "dependencies": {
+    "react": "^18",
+    "react-dom": "^18"
+  },
+  "devDependencies": {
+    "vite": "^5",
+    "@vitejs/plugin-react": "^4"
+  }
+}

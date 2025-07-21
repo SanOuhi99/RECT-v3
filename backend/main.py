@@ -7,7 +7,7 @@ import pathlib, os
 app = FastAPI()
 DATA_DIR = "/app/data"
 
-CSV_PATH =  "states_counties.csv"
+CSV_PATH =  "/backend/states_counties.csv"
 
 DB_FILE    = "/app/crm_owners.json"
 

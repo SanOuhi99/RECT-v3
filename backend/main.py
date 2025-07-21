@@ -5,13 +5,17 @@ import pathlib, os
 
 
 app = FastAPI()
+DATA_DIR = "/app/data"
 
-CSV_PATH = pathlib.Path(__file__).with_name(os.getenv("CSV_PATH", "states_counties.csv"))
+CSV_PATH =  "states_counties.csv"
 
 DB_FILE    = "/app/crm_owners.json"
 
 # ---------- helper ---------- #
 def load_states_counties():
+    if not os.path.exists(CSV_FILE):
+        print("CSV file not found")
+        return
     data = {}
     with open(CSV_PATH, newline='') as f:
         reader = csv.DictReader(f)

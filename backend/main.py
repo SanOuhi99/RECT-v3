@@ -13,7 +13,7 @@ DB_FILE    = "/app/crm_owners.json"
 
 # ---------- helper ---------- #
 def load_states_counties():
-    if not os.path.exists(CSV_FILE):
+    if not os.path.exists(CSV_PATH):
         print("CSV file not found")
         return
     data = {}

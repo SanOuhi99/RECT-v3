@@ -194,9 +194,15 @@ const RECTLandingPage = () => {
                 title: 'Real Estate Agent',
                 desc: 'Track your buyer clients and receive alerts if they close with another agent.',
                 actions: [
-                  { label: 'Agent Login', href: '/agent-login' },
-                  { label: 'Agent Sign Up', href: '/agent-signup', outline: true },
-                ],
+                        { 
+                          label: 'Agent Login', 
+                          element: <Link to="/agent-login" className="block py-3 px-6 rounded-full font-medium bg-red-600 text-white hover:bg-red-700">Agent Login</Link>
+                        },
+                        { 
+                          label: 'Agent Sign Up', 
+                          element: <Link to="/agent-signup" className="block py-3 px-6 rounded-full font-medium border-2 border-red-600 text-red-600 hover:bg-red-600 hover:text-white">Sign Up</Link>
+                        }
+                      ],
               },
               {
                 icon: 'fas fa-building',

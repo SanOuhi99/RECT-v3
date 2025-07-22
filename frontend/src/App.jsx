@@ -1,14 +1,17 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import RECTLandingPage from './RECTLandingPage';
-import AgentDashboard from './pages/AgentDashboard';
+import AgentLogin from './pages/AgentLogin';
+import AgentSignup from './pages/AgentSignup';
+import AdminDashboard from './pages/AdminDashboard';
 
 const App = () => {
   return (
     <Routes>
       <Route path="/" element={<RECTLandingPage />} />
-      <Route path="/dashboard" element={<AgentDashboard />} />
-      {/* Add other routes later */}
+      <Route path="/agent-login" element={<AgentLogin />} />
+      <Route path="/agent-signup" element={<AgentSignup />} />
+      <Route path="/admin" element={<AdminDashboard />} />
     </Routes>
   );
 };

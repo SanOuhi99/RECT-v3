@@ -25,9 +25,9 @@ const AgentSignup = () => {
         const apiUrl = import.meta.env.VITE_API_URL;
         if (!apiUrl) throw new Error('API URL is not configured');
         
-        const response = await fetch(`https://backend-rectenvironment.up.railway.app/states_counties`);
-        if (!response.ok) throw new Error('Failed to fetch states');
-        const data = await response.json();
+        const apiUrl = import.meta.env.VITE_API_URL;
+        if (!apiUrl) throw new Error('API URL is not configured');
+        const response = await fetch(`${apiUrl}/states_counties`);
         setStatesData(data);
         setError(null);
       } catch (err) {

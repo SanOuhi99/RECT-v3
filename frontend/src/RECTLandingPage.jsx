@@ -114,13 +114,15 @@ const RECTLandingPage = () => {
             </div>
 
             {/* Desktop links */}
-            <div className="hidden md:flex space-x-8">
-              {['features', 'about', 'contact', 'admin'].map((id) => (
-                <a key={id} href={`#${id}`} className="nav-link text-gray-700">
-                  {id.charAt(0).toUpperCase() + id.slice(1)}
-                </a>
-              ))}
-            </div>
+            {['features', 'about', 'contact', 'admin'].map((id) => (
+                  <Link 
+                    key={id} 
+                    to={`/${id}`}
+                    className="nav-link text-gray-700"
+                  >
+                    {id.charAt(0).toUpperCase() + id.slice(1)}
+                  </Link>
+                ))}
 
             {/* Mobile toggle */}
             <button
@@ -192,8 +194,8 @@ const RECTLandingPage = () => {
                 title: 'Real Estate Agent',
                 desc: 'Track your buyer clients and receive alerts if they close with another agent.',
                 actions: [
-                  { label: 'Agent Login', href: '#agent-login' },
-                  { label: 'Agent Sign Up', href: '#agent-signup', outline: true },
+                  { label: 'Agent Login', href: '/agent-login' },
+                  { label: 'Agent Sign Up', href: '/agent-signup', outline: true },
                 ],
               },
               {

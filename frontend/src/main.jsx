@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import '@fortawesome/fontawesome-free/css/all.min.css'; // Font Awesome (npm i @fortawesome/fontawesome-free)
+//import '@fortawesome/fontawesome-free/css/all.min.css'; // Font Awesome (npm i @fortawesome/fontawesome-free)
 
 const RECTLandingPage = () => {
   const [formData, setFormData] = useState({

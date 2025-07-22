@@ -18,37 +18,45 @@ const AgentSignup = () => {
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchStates = async () => {
-      try {
-        setIsLoading(true);
-        const apiUrl = import.meta.env.VITE_API_URL;
-        if (!apiUrl) throw new Error('API URL is not configured');
-        
-        const response = await fetch(`${apiUrl}/states_counties`, {
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          credentials: 'include' // Important for cookies if using session auth
-        });
-        
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        
-        const data = await response.json();
-        console.log("Fetched data:", data);
-        setStatesData(data);
-        setError(null);
-      } catch (err) {
-        console.error('Error loading states:', err);
-        setError('Failed to load states data. Please try again later.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
+useEffect(() => {
+  const fetchStates = async () => {
+    try {
+      setIsLoading(true);
+      const apiUrl = import.meta.env.VITE_API_URL;
+      console.log("API URL:", apiUrl);
+      if (!apiUrl) throw new Error('API URL is not configured');
 
-    fetchStates();
-  }, []);
+      const response = await fetch(`${apiUrl}/states_counties`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        credentials: 'include'
+      });
+
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      
+      const data = await response.json();
+      console.log("Fetched states data:", data);
+
+      if (!Array.isArray(data)) {
+        throw new Error("Invalid response format");
+      }
+
+      setStatesData(data);
+      setError(null);
+    } catch (err) {
+      console.error('Error loading states:', err);
+      setError('Failed to load states data. Please try again later.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  fetchStates();
+}, []);
+
 
   const handleStateChange = (e) => {
     const stateFIPS = e.target.value;

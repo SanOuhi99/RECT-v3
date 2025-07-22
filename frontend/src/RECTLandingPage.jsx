@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 //import '@fortawesome/fontawesome-free/css/all.min.css'; // Font Awesome (npm i @fortawesome/fontawesome-free)
 
 const RECTLandingPage = () => {
@@ -114,13 +115,15 @@ const RECTLandingPage = () => {
             </div>
 
             {/* Desktop links */}
-            <div className="hidden md:flex space-x-8">
-              {['features', 'about', 'contact', 'admin'].map((id) => (
-                <a key={id} href={`#${id}`} className="nav-link text-gray-700">
-                  {id.charAt(0).toUpperCase() + id.slice(1)}
-                </a>
-              ))}
-            </div>
+            {['features', 'about', 'contact', 'admin'].map((id) => (
+                  <Link 
+                    key={id} 
+                    to={`/${id}`}
+                    className="nav-link text-gray-700"
+                  >
+                    {id.charAt(0).toUpperCase() + id.slice(1)}
+                  </Link>
+                ))}
 
             {/* Mobile toggle */}
             <button
@@ -191,17 +194,16 @@ const RECTLandingPage = () => {
                 icon: 'fas fa-user-tie',
                 title: 'Real Estate Agent',
                 desc: 'Track your buyer clients and receive alerts if they close with another agent.',
-                actions:
-                	[
-		                { 
-		                  label: 'Agent Login', 
-		                  element: <Link to="/agent-login" className="block py-3 px-6 rounded-full font-medium bg-red-600 text-white hover:bg-red-700 text-center">Agent Login</Link>
-		                },
-		                { 
-		                  label: 'Agent Sign Up', 
-		                  element: <Link to="/agent-signup" className="block py-3 px-6 rounded-full font-medium border-2 border-red-600 text-red-600 hover:bg-red-600 hover:text-white text-center">Sign Up</Link>
-		                }
-	                ],
+                actions: [
+                        { 
+                          label: 'Agent Login', 
+                          element: <Link to="/agent-login" className="block py-3 px-6 rounded-full font-medium bg-red-600 text-white hover:bg-red-700">Agent Login</Link>
+                        },
+                        { 
+                          label: 'Agent Sign Up', 
+                          element: <Link to="/agent-signup" className="block py-3 px-6 rounded-full font-medium border-2 border-red-600 text-red-600 hover:bg-red-600 hover:text-white">Sign Up</Link>
+                        }
+                      ],
               },
               {
                 icon: 'fas fa-building',

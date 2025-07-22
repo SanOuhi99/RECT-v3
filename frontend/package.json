@@ -4,14 +4,15 @@
   "scripts": {
     "build": "npm run build-vite",
     "build-vite": "vite build",
-    "dev": "vite"
+    "dev": "vite",
+    "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^18",
-    "react-dom": "^18"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "vite": "^5",
-    "@vitejs/plugin-react": "^4"
+    "@vitejs/plugin-react": "^4.0.3",
+    "vite": "^5.4.19"
   }
 }

@@ -25,9 +25,17 @@ const AgentSignup = () => {
         const apiUrl = import.meta.env.VITE_API_URL;
         if (!apiUrl) throw new Error('API URL is not configured');
         
-        const apiUrl = import.meta.env.VITE_API_URL;
-        if (!apiUrl) throw new Error('API URL is not configured');
-        const response = await fetch(`${apiUrl}/states_counties`);
+        const response = await fetch(`${apiUrl}/states_counties`, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          credentials: 'include' // Important for cookies if using session auth
+        });
+        
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        
+        const data = await response.json();
         setStatesData(data);
         setError(null);
       } catch (err) {

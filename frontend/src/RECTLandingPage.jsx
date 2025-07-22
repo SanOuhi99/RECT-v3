@@ -206,6 +206,7 @@ const RECTLandingPage = () => {
                     outline: true,
                   },
                 ],
+              },
               {
                 icon: 'fas fa-building',
                 title: 'Brokerage / Company',

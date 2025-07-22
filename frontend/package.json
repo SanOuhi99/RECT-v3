@@ -2,11 +2,12 @@
   "name": "frontend",
   "type": "module",
   "scripts": {
-  "dev": "vite",
-  "build": "vite build",
-  "preview": "vite preview",
-  "preinstall": "npm install -D tailwindcss postcss autoprefixer",
-  "prepare": "npm run build"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 8080",
+    "start": "vite preview --port 8080"
+    "preinstall": "npm install -D tailwindcss postcss autoprefixer",
+    "prepare": "npm run build"
 },
   "dependencies": {
     "react": "^18.2.0",

@@ -15,18 +15,26 @@ const AgentSignup = () => {
   const [counties, setCounties] = useState([]);
   const [selectedSelections, setSelectedSelections] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchStates = async () => {
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/states_counties`);
+        setIsLoading(true);
+        const apiUrl = import.meta.env.VITE_API_URL;
+        if (!apiUrl) throw new Error('API URL is not configured');
+        
+        const response = await fetch(`${apiUrl}/states_counties`);
         if (!response.ok) throw new Error('Failed to fetch states');
         const data = await response.json();
         setStatesData(data);
-      } catch (error) {
-        console.error('Error loading states:', error);
-        alert('Error loading states data');
+        setError(null);
+      } catch (err) {
+        console.error('Error loading states:', err);
+        setError('Failed to load states data. Please try again later.');
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -127,7 +135,11 @@ const AgentSignup = () => {
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="bg-white rounded-lg shadow-md p-6">
           <h2 className="text-2xl font-bold text-gray-800 mb-6">Agent Registration</h2>
-          
+          {error && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+              {error}
+            </div>
+          )}
           <form onSubmit={handleSubmit}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               <div>

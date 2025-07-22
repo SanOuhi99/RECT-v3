@@ -3,8 +3,16 @@ from pydantic import BaseModel, EmailStr
 import csv, uuid, os, datetime, json
 import pathlib, os
 
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Or restrict to your frontend URL
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows OPTIONS, GET, POST, etc.
+    allow_headers=["*"],
+)
 app = FastAPI()
+
+
 DATA_DIR = "/app/data"
 
 CSV_PATH =  "states_counties.csv"

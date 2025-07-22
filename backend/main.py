@@ -3,6 +3,8 @@ from pydantic import BaseModel, EmailStr
 import csv, uuid, os, datetime, json
 import pathlib, os
 
+
+app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Or restrict to your frontend URL
@@ -10,8 +12,6 @@ app.add_middleware(
     allow_methods=["*"],  # Allows OPTIONS, GET, POST, etc.
     allow_headers=["*"],
 )
-app = FastAPI()
-
 
 DATA_DIR = "/app/data"
 

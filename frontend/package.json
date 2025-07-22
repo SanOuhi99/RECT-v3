@@ -1,5 +1,6 @@
 {
   "name": "frontend",
+  "type": "module",
   "scripts": {
     "build": "npm run build-vite",
     "build-vite": "vite build",

@@ -25,7 +25,7 @@ const AgentSignup = () => {
         const apiUrl = import.meta.env.VITE_API_URL;
         if (!apiUrl) throw new Error('API URL is not configured');
         
-        const response = await fetch(`${apiUrl}/states_counties`, {
+        const response = await fetch('https://backend-rectenvironment.up.railway.app/states_counties', {
           headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json'

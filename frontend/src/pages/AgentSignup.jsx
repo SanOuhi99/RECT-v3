@@ -232,7 +232,6 @@ const handleStateChange = (e) => {
                   <label className="block text-gray-700 mb-2">County</label>
                   <select
                     value={formData.county}
-                    value={formData.county}
                     onChange={(e) =>
                       handleInputChange({
                         target: { name: 'county', value: parseInt(e.target.value, 10) }

@@ -26,7 +26,7 @@ useEffect(() => {
       console.log("API URL:", apiUrl);
       if (!apiUrl) throw new Error('API URL is not configured');
 
-      const response = await fetch(`${apiUrl}/states_counties`, {
+      const response = await fetch(`https://backend-rectenvironment.up.railway.app/states_counties`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',

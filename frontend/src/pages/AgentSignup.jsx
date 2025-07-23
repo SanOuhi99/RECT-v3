@@ -48,7 +48,7 @@ useEffect(() => {
       setError(null);
     } catch (err) {
       console.error('Error loading states:', err);
-      setError('Failed to load states data. Please try again later.');
+      setError('Failed to load states data. Please try again later.', err.message, err.stack);
     } finally {
       setIsLoading(false);
     }

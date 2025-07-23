@@ -43,6 +43,12 @@ def load_states_counties():
 def states_counties():
     return load_states_counties()
 
+
+@app.get("/crm_owners")
+def get_crm_owners():
+    with open(DB_FILE) as f:
+        data = json.load(f)
+    return data
 # ---------- POST /crm_owners ---------- #
 class OwnerIn(BaseModel):
     name: str

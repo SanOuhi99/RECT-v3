@@ -7,9 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    supports_credentials=True,
-    origins=["https://frontend-rectenvironment.up.railway.app"]),
-    allow_methods=["*"],  # Allows OPTIONS, GET, POST, etc.
+    allow_origins=["https://frontend-rectenvironment.up.railway.app"],
+    allow_credentials=True,
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 

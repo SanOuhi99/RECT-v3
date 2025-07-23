@@ -58,16 +58,17 @@ useEffect(() => {
 }, []);
 
 
-  const handleStateChange = (e) => {
-    const stateFIPS = e.target.value;
-    const selectedState = statesData.find(s => s.state_FIPS === stateFIPS);
-    setCounties(selectedState?.counties || []);
-    setFormData(prev => ({
-      ...prev,
-      state: stateFIPS,
-      county: ''
-    }));
-  };
+const handleStateChange = (e) => {
+  const stateFIPS = parseInt(e.target.value, 10);
+  const selectedState = statesData.find(s => s.state_FIPS === stateFIPS);
+
+  setCounties(selectedState?.counties || []);
+  setFormData(prev => ({
+    ...prev,
+    state: stateFIPS,
+    county: ''
+  }));
+};
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -231,9 +232,12 @@ useEffect(() => {
                   <label className="block text-gray-700 mb-2">County</label>
                   <select
                     value={formData.county}
-                    onChange={(e) => handleInputChange({
-                      target: { name: 'county', value: e.target.value }
-                    })}
+                    value={formData.county}
+                    onChange={(e) =>
+                      handleInputChange({
+                        target: { name: 'county', value: parseInt(e.target.value, 10) }
+                      })
+                    }
                     disabled={!formData.state}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 outline-none"
                   >

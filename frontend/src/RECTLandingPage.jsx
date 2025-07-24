@@ -232,23 +232,34 @@ const RECTLandingPage = () => {
                 <h3 className="text-2xl font-bold text-gray-900 mb-4">{card.title}</h3>
                 <p className="text-gray-600 mb-8">{card.desc}</p>
                 <div className="space-y-3">
-                  {card.actions.map((btn) => (
-                    <a
-                      key={btn.label}
-                      href={btn.href}
-                      className={`block py-3 px-6 rounded-full font-medium transition-colors ${
-                        btn.outline
-                          ? 'border-2 border-red-600 text-red-600 hover:bg-red-600 hover:text-white'
-                          : 'bg-red-600 text-white hover:bg-red-700'
-                      }`}
-                    >
-                      {btn.label}
-                    </a>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
+  {card.actions.map((btn) =>
+    btn.to ? (
+      <Link
+        key={btn.label}
+        to={btn.to}
+        className={`block py-3 px-6 rounded-full font-medium transition-colors ${
+          btn.outline
+            ? 'border-2 border-red-600 text-red-600 hover:bg-red-600 hover:text-white'
+            : 'bg-red-600 text-white hover:bg-red-700'
+        }`}
+      >
+        {btn.label}
+      </Link>
+    ) : (
+      <a
+        key={btn.label}
+        href={btn.href}
+        className={`block py-3 px-6 rounded-full font-medium transition-colors ${
+          btn.outline
+            ? 'border-2 border-red-600 text-red-600 hover:bg-red-600 hover:text-white'
+            : 'bg-red-600 text-white hover:bg-red-700'
+        }`}
+      >
+        {btn.label}
+      </a>
+    )
+  )}
+</div>
         </div>
       </section>
 

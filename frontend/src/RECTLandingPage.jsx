@@ -233,7 +233,7 @@ const RECTLandingPage = () => {
                 <p className="text-gray-600 mb-8">{card.desc}</p>
 
 
-<div className="space-y-3">
+                <div className="space-y-3">
   {card.actions.map((btn) =>
     btn.to ? (
       <Link
@@ -261,8 +261,8 @@ const RECTLandingPage = () => {
       </a>
     )
   )}
-             </div>
-          </div>
+                </div>
+              </div>
       </section>
 
 

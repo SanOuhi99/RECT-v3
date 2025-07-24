@@ -17,7 +17,7 @@ const RECTLandingPage = () => {
   };
 
   const handleSubmit = (e) => {
-    e.preventDefault(); // prevent page reload
+    e.preventDefault();
     console.log('Form submitted:', formData);
     alert('Thank you for your message! We\'ll get back to you soon.');
     setFormData({ name: '', email: '', subject: '', message: '' });
@@ -115,15 +115,17 @@ const RECTLandingPage = () => {
             </div>
 
             {/* Desktop links */}
-            {['features', 'about', 'contact', 'admin'].map((id) => (
-                  <Link 
-                    key={id} 
-                    to={`/${id}`}
-                    className="nav-link text-gray-700"
-                  >
-                    {id.charAt(0).toUpperCase() + id.slice(1)}
-                  </Link>
-                ))}
+            <div className="hidden md:flex space-x-8">
+              {['features', 'about', 'contact', 'admin'].map((id) => (
+                <Link 
+                  key={id} 
+                  to={`/${id}`}
+                  className="nav-link text-gray-700 hover:text-red-600"
+                >
+                  {id.charAt(0).toUpperCase() + id.slice(1)}
+                </Link>
+              ))}
+            </div>
 
             {/* Mobile toggle */}
             <button
@@ -139,14 +141,14 @@ const RECTLandingPage = () => {
           {mobileOpen && (
             <div className="md:hidden pb-3">
               {['features', 'about', 'contact', 'admin'].map((id) => (
-                <a
+                <Link
                   key={id}
-                  href={`#${id}`}
+                  to={`/${id}`}
                   className="block px-4 py-2 text-gray-700 hover:bg-gray-100"
                   onClick={() => setMobileOpen(false)}
                 >
                   {id.charAt(0).toUpperCase() + id.slice(1)}
-                </a>
+                </Link>
               ))}
             </div>
           )}
@@ -164,12 +166,12 @@ const RECTLandingPage = () => {
               RECT alerts you when your buyers close with another agent, ensuring you get the commission you've earned.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
-              <a
-                href="#signup"
+              <Link
+                to="/signup"
                 className="btn-primary-custom bg-red-600 text-white px-8 py-4 rounded-full text-lg font-medium hover:bg-red-700 transition-all text-center"
               >
                 Get Started
-              </a>
+              </Link>
               <a
                 href="#features"
                 className="btn-outline-custom border-2 border-white text-white px-8 py-4 rounded-full text-lg font-medium hover:bg-white hover:text-gray-800 transition-all text-center"
@@ -211,14 +213,24 @@ const RECTLandingPage = () => {
                 icon: 'fas fa-building',
                 title: 'Brokerage / Company',
                 desc: 'Register your company to provide access to your agents.',
-                actions: [{ label: 'Register Company', href: '#company-register' }],
+                actions: [
+                  {
+                    label: 'Register Company',
+                    to: '/company-register',
+                    outline: false,
+                  },
+                ],
               },
               {
                 icon: 'fas fa-rocket',
                 title: 'Agent Onboarding',
                 desc: 'New to RECT? Start the guided onboarding process.',
                 actions: [
-                  { label: 'Start Onboarding', href: '#onboarding', outline: true },
+                  {
+                    label: 'Start Onboarding',
+                    to: '/onboarding',
+                    outline: true,
+                  },
                 ],
               },
             ].map((card) => (
@@ -231,40 +243,26 @@ const RECTLandingPage = () => {
                 </div>
                 <h3 className="text-2xl font-bold text-gray-900 mb-4">{card.title}</h3>
                 <p className="text-gray-600 mb-8">{card.desc}</p>
-
-
                 <div className="space-y-3">
-  {card.actions.map((btn) =>
-    btn.to ? (
-      <Link
-        key={btn.label}
-        to={btn.to}
-        className={`block py-3 px-6 rounded-full font-medium transition-colors ${
-          btn.outline
-            ? 'border-2 border-red-600 text-red-600 hover:bg-red-600 hover:text-white'
-            : 'bg-red-600 text-white hover:bg-red-700'
-        }`}
-      >
-        {btn.label}
-      </Link>
-    ) : (
-      <a
-        key={btn.label}
-        href={btn.href}
-        className={`block py-3 px-6 rounded-full font-medium transition-colors ${
-          btn.outline
-            ? 'border-2 border-red-600 text-red-600 hover:bg-red-600 hover:text-white'
-            : 'bg-red-600 text-white hover:bg-red-700'
-        }`}
-      >
-        {btn.label}
-      </a>
-    )
-  )}
+                  {card.actions.map((btn) => (
+                    <Link
+                      key={btn.label}
+                      to={btn.to}
+                      className={`block py-3 px-6 rounded-full font-medium transition-colors ${
+                        btn.outline
+                          ? 'border-2 border-red-600 text-red-600 hover:bg-red-600 hover:text-white'
+                          : 'bg-red-600 text-white hover:bg-red-700'
+                      }`}
+                    >
+                      {btn.label}
+                    </Link>
+                  ))}
+                </div>
               </div>
+            ))}
           </div>
+        </div>
       </section>
-
 
       {/* ---------- Features Section ---------- */}
       <section id="features" className="py-20 scroll-mt-20">
@@ -405,9 +403,9 @@ const RECTLandingPage = () => {
               <ul className="space-y-2">
                 {['features', 'about', 'contact'].map((id) => (
                   <li key={id}>
-                    <a href={`#${id}`} className="text-gray-400 hover:text-white transition-colors">
+                    <Link to={`/${id}`} className="text-gray-400 hover:text-white transition-colors">
                       {id.charAt(0).toUpperCase() + id.slice(1)}
-                    </a>
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -416,14 +414,14 @@ const RECTLandingPage = () => {
               <h5 className="text-lg font-bold mb-4">Legal</h5>
               <ul className="space-y-2">
                 <li>
-                  <a href="#privacy" className="text-gray-400 hover:text-white transition-colors">
+                  <Link to="/privacy" className="text-gray-400 hover:text-white transition-colors">
                     Privacy Policy
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#terms" className="text-gray-400 hover:text-white transition-colors">
+                  <Link to="/terms" className="text-gray-400 hover:text-white transition-colors">
                     Terms of Service
-                  </a>
+                  </Link>
                 </li>
               </ul>
             </div>

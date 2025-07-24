@@ -259,8 +259,8 @@ const RECTLandingPage = () => {
       </a>
     )
   )}
-</div>
-        </div>
+                </div>
+        
       </section>
 
       {/* ---------- Features Section ---------- */}

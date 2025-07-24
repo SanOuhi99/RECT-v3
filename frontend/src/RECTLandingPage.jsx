@@ -263,6 +263,7 @@ const RECTLandingPage = () => {
   )}
                 </div>
               </div>
+          </div>
       </section>
 
 

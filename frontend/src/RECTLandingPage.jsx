@@ -231,7 +231,9 @@ const RECTLandingPage = () => {
                 </div>
                 <h3 className="text-2xl font-bold text-gray-900 mb-4">{card.title}</h3>
                 <p className="text-gray-600 mb-8">{card.desc}</p>
-                <div className="space-y-3">
+
+
+<div className="space-y-3">
   {card.actions.map((btn) =>
     btn.to ? (
       <Link
@@ -259,9 +261,10 @@ const RECTLandingPage = () => {
       </a>
     )
   )}
-                </div>
-        
+</div>
+      </div>
       </section>
+
 
       {/* ---------- Features Section ---------- */}
       <section id="features" className="py-20 scroll-mt-20">

@@ -117,7 +117,7 @@ const handleStateChange = (e) => {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/crm_owners`, {
+      const response = await fetch(`https://backend-rectenvironment.up.railway.app/crm_owners`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -3,7 +3,7 @@ from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, validator
-from sqlalchemy import create_engine, Column, Integer, String, JSON, UniqueConstraint
+from sqlalchemy import create_engine, Column, Integer, String, JSON, text, UniqueConstraint
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from dotenv import load_dotenv
 from passlib.context import CryptContext
@@ -140,9 +140,9 @@ app.add_middleware(
 @app.get("/states_counties", response_model=List[StateCounties])
 def get_states_counties(db: Session = Depends(get_db)):
     # Replace with your real table name, adjust query if needed
-    result = db.execute("""
+    result = db.execute(text("""
         SELECT statefips, state, countyfips, county FROM states_counties_table
-    """).fetchall()
+    """)).fetchall()
 
     data = {}
     for row in result:

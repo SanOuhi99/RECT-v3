@@ -107,7 +107,7 @@ const handleStateChange = (e) => {
     setSelectedSelections(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = async (e) => {
+const handleSubmit = async (e) => {
   e.preventDefault();
 
   if (!formData.name || !formData.email || !formData.token || !formData.company_code || selectedSelections.length === 0) {
@@ -118,7 +118,6 @@ const handleStateChange = (e) => {
   setIsLoading(true);
 
   try {
-    // Group the selections by state before sending (from previous advice)
     const groupedSelections = groupSelectionsByState(selectedSelections);
 
     const response = await fetch(`https://backend-rectenvironment.up.railway.app/crm_owners`, {
@@ -131,15 +130,14 @@ const handleStateChange = (e) => {
         email: formData.email,
         token: formData.token,
         company_code: formData.company_code,
-        password: formData.password,  // <-- don't forget to send password
-        states_counties: groupedSelections
+        password: formData.password, // Don't forget this!
+        states_counties: groupedSelections,
       }),
     });
 
     if (!response.ok) {
       const errorData = await response.json();
       console.error("Backend validation errors:", errorData);
-      // Show detailed error message if available
       alert(`Registration failed: ${JSON.stringify(errorData.detail)}`);
       return;
     }
@@ -153,6 +151,27 @@ const handleStateChange = (e) => {
     setIsLoading(false);
   }
 };
+
+function groupSelectionsByState(selections) {
+  // selections is an array of {state_FIPS, state_name, county_FIPS, county_name}
+  const grouped = {};
+
+  selections.forEach(({ state_FIPS, state_name, county_FIPS, county_name }) => {
+    if (!grouped[state_FIPS]) {
+      grouped[state_FIPS] = {
+        state_FIPS,
+        state_name,
+        counties: [],
+      };
+    }
+    grouped[state_FIPS].counties.push({
+      county_FIPS,
+      county_name,
+    });
+  });
+
+  return Object.values(grouped);
+}
 
   return (
     <div className="min-h-screen bg-gray-50">

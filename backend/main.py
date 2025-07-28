@@ -147,7 +147,7 @@ class OwnerBase(BaseModel):
     name: str
     email: EmailStr
     token: str
-    company_code: str
+    companycode: str
     password: str
     states_counties: List[StateCounties]
 
@@ -165,7 +165,7 @@ class OwnerOut(BaseModel):
     name: str
     email: EmailStr
     token: str
-    company_code: str
+    companycode: str
     states_counties: List[StateCounties]
 
     class Config:
@@ -224,7 +224,7 @@ def create_company(company: CompanyCreate, db: Session = Depends(get_db)):
 @app.post("/crm_owners", response_model=OwnerOut)
 def create_owner(owner: OwnerCreate, db: Session = Depends(get_db)):
     # Check companycode exists
-    company = db.query(Company).filter(Company.companycode == owner.company_code).first()
+    company = db.query(Company).filter(Company.companycode == owner.companycode).first()
     if not company:
         raise HTTPException(status_code=400, detail="Invalid company code")
 
@@ -237,7 +237,7 @@ def create_owner(owner: OwnerCreate, db: Session = Depends(get_db)):
         name=owner.name,
         email=owner.email,
         token=owner.token,
-        companycode=owner.company_code,
+        companycode=owner.companycode,
         password=hash_password(owner.password),
         states_counties=[sc.dict() for sc in owner.states_counties],
     )

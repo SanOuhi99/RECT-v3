@@ -2,16 +2,26 @@ import os
 from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, validator
 from sqlalchemy import create_engine, Column, Integer, String, JSON, UniqueConstraint
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from dotenv import load_dotenv
+from passlib.context import CryptContext
 
-load_dotenv()  # load env vars from .env if present
+load_dotenv()  # Load env vars from .env if present
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise Exception("DATABASE_URL environment variable not set")
+
+# Password hashing setup
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
 
 # --- Database setup ---
 engine = create_engine(
@@ -21,7 +31,6 @@ engine = create_engine(
     max_overflow=0,
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
 Base = declarative_base()
 
 def get_db():
@@ -38,17 +47,16 @@ class Company(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     companycode = Column(String, nullable=False, unique=True, index=True)
-    password = Column(String, nullable=False)
+    password = Column(String, nullable=False)  # hashed password
 
 class CrmOwner(Base):
     __tablename__ = "crm_owners"
-
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
-    email = Column(String, nullable=False)
+    email = Column(String, nullable=False, unique=True, index=True)
     token = Column(String, nullable=False)
     companycode = Column(String, nullable=False)  # Should match Company.companycode
-    password = Column(String, nullable=False)
+    password = Column(String, nullable=False)  # hashed password
     seen_property_ids = Column(JSON, nullable=True)
     states_counties = Column(JSON, nullable=True)
 
@@ -72,11 +80,22 @@ class CompanyBase(BaseModel):
     companycode: str
     password: str
 
+    @validator('password')
+    def password_min_length(cls, v):
+        if len(v) < 6:
+            raise ValueError('Password must be at least 6 characters')
+        return v
+
 class CompanyCreate(CompanyBase):
     pass
 
-class CompanyOut(CompanyBase):
+class CompanyOut(BaseModel):
     id: int
+    name: str
+    companycode: str
+
+    class Config:
+        orm_mode = True
 
 # CRM Owner schemas
 class OwnerBase(BaseModel):
@@ -87,11 +106,25 @@ class OwnerBase(BaseModel):
     password: str
     states_counties: List[StateCounties]
 
+    @validator('password')
+    def password_min_length(cls, v):
+        if len(v) < 6:
+            raise ValueError('Password must be at least 6 characters')
+        return v
+
 class OwnerCreate(OwnerBase):
     pass
 
-class OwnerOut(OwnerBase):
+class OwnerOut(BaseModel):
     id: int
+    name: str
+    email: EmailStr
+    token: str
+    company_code: str
+    states_counties: List[StateCounties]
+
+    class Config:
+        orm_mode = True
 
 # --- FastAPI app ---
 app = FastAPI()
@@ -106,7 +139,7 @@ app.add_middleware(
 
 @app.get("/states_counties", response_model=List[StateCounties])
 def get_states_counties(db: Session = Depends(get_db)):
-    # Adjust to your actual table and column names
+    # Replace with your real table name, adjust query if needed
     result = db.execute("""
         SELECT statefips, state, countyfips, county FROM states_counties_table
     """).fetchall()
@@ -135,7 +168,7 @@ def create_company(company: CompanyCreate, db: Session = Depends(get_db)):
     db_company = Company(
         name=company.name,
         companycode=company.companycode,
-        password=company.password,  # TODO: hash in production
+        password=hash_password(company.password),
     )
     db.add(db_company)
     db.commit()
@@ -149,12 +182,17 @@ def create_owner(owner: OwnerCreate, db: Session = Depends(get_db)):
     if not company:
         raise HTTPException(status_code=400, detail="Invalid company code")
 
+    # Check unique email for owner
+    existing_owner = db.query(CrmOwner).filter(CrmOwner.email == owner.email).first()
+    if existing_owner:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
     db_owner = CrmOwner(
         name=owner.name,
         email=owner.email,
         token=owner.token,
         companycode=owner.company_code,
-        password=owner.password,  # TODO: hash in production
+        password=hash_password(owner.password),
         states_counties=[sc.dict() for sc in owner.states_counties],
     )
     db.add(db_owner)

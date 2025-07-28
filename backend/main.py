@@ -1,6 +1,9 @@
 import os
 from typing import List, Optional
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends,Request, HTTPException
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, validator
 from sqlalchemy import create_engine, Column, Integer, String, JSON, text,insert, UniqueConstraint
@@ -9,6 +12,7 @@ from dotenv import load_dotenv
 from passlib.context import CryptContext
 import csv
 from pathlib import Path
+
 
 
 load_dotenv()  # Load env vars from .env if present
@@ -242,6 +246,12 @@ def create_owner(owner: OwnerCreate, db: Session = Depends(get_db)):
     db.refresh(db_owner)
     return db_owner
 
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors(), "body": exc.body},
+    )
 @app.get("/health")
 def health():
     return {"status": "ok"}

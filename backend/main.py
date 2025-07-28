@@ -141,7 +141,7 @@ app.add_middleware(
 def get_states_counties(db: Session = Depends(get_db)):
     # Replace with your real table name, adjust query if needed
     result = db.execute(text("""
-        SELECT statefips, state, countyfips, county FROM states_counties_table
+        SELECT statefips, state, countyfips, county FROM states_counties
     """)).fetchall()
 
     data = {}

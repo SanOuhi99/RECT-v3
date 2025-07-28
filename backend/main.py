@@ -89,6 +89,28 @@ def get_crm_owners():
         } for owner in owners
     ]
 
+@app.get("/states_counties")
+def get_states_counties(db: Session = Depends(get_db)):
+    # Query your Postgres table for states and counties
+    # For example:
+    result = db.execute("SELECT state_fips, state_name, county_fips, county_name FROM states_counties_table")
+    records = result.fetchall()
+    # transform to desired structure (group counties by state)
+    data = {}
+    for row in records:
+        state_fips = row.state_fips
+        if state_fips not in data:
+            data[state_fips] = {
+                "state_FIPS": state_fips,
+                "state_name": row.state_name,
+                "counties": []
+            }
+        data[state_fips]["counties"].append({
+            "county_FIPS": row.county_fips,
+            "county_name": row.county_name
+        })
+    return list(data.values())
+
 @app.get("/health")
 def health():
     return {"status": "ok"}

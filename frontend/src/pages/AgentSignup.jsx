@@ -108,45 +108,51 @@ const handleStateChange = (e) => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!formData.name || !formData.email || !formData.token || !formData.company_code || selectedSelections.length === 0) {
-      alert("Please fill all fields and add at least one state/county selection");
+  e.preventDefault();
+
+  if (!formData.name || !formData.email || !formData.token || !formData.company_code || selectedSelections.length === 0) {
+    alert("Please fill all fields and add at least one state/county selection");
+    return;
+  }
+
+  setIsLoading(true);
+
+  try {
+    // Group the selections by state before sending (from previous advice)
+    const groupedSelections = groupSelectionsByState(selectedSelections);
+
+    const response = await fetch(`https://backend-rectenvironment.up.railway.app/crm_owners`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: formData.name,
+        email: formData.email,
+        token: formData.token,
+        company_code: formData.company_code,
+        password: formData.password,  // <-- don't forget to send password
+        states_counties: groupedSelections
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Backend validation errors:", errorData);
+      // Show detailed error message if available
+      alert(`Registration failed: ${JSON.stringify(errorData.detail)}`);
       return;
     }
 
-    setIsLoading(true);
-
-    try {
-      const response = await fetch(`https://backend-rectenvironment.up.railway.app/crm_owners`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          token: formData.token,
-          company_code: formData.company_code,
-          password: formData.password,
-          states_counties: selectedSelections
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to save CRM owner');
-      }
-
-      alert("Registration successful!");
-      navigate('/');
-    } catch (error) {
-      console.error('Registration error:', error);
-      alert(`Registration failed: ${error.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    alert("Registration successful!");
+    navigate('/');
+  } catch (error) {
+    console.error('Registration error:', error);
+    alert(`Registration failed: ${error.message}`);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen bg-gray-50">

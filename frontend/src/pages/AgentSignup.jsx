@@ -7,7 +7,7 @@ const AgentSignup = () => {
     name: '',
     email: '',
     token: '',
-    company_code: '',
+    companycode: '',
     password: '',
     state: '',
     county: ''
@@ -110,7 +110,7 @@ const handleStateChange = (e) => {
 const handleSubmit = async (e) => {
   e.preventDefault();
 
-  if (!formData.name || !formData.email || !formData.token || !formData.company_code || selectedSelections.length === 0) {
+  if (!formData.name || !formData.email || !formData.token || !formData.companycode || selectedSelections.length === 0) {
     alert("Please fill all fields and add at least one state/county selection");
     return;
   }
@@ -129,7 +129,7 @@ const handleSubmit = async (e) => {
         name: formData.name,
         email: formData.email,
         token: formData.token,
-        company_code: formData.company_code,
+        companycode: formData.companycode,
         password: formData.password, // Don't forget this!
         states_counties: groupedSelections,
       }),
@@ -238,8 +238,8 @@ function groupSelectionsByState(selections) {
                 <label className="block text-gray-700 mb-2">Company Code</label>
                 <input
                   type="text"
-                  name="company_code"
-                  value={formData.company_code}
+                  name="companycode"
+                  value={formData.companycode}
                   onChange={handleInputChange}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 outline-none"
                   required

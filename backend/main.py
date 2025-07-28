@@ -63,9 +63,10 @@ def import_states_counties_from_csv(csv_path: str, db: Session):
             })
 
     if rows:
-        db.execute(insert(StatesCountiesTable), rows)
+        db.execute(insert(StatesCounties), rows)
         db.commit()
         print(f"✅ Imported {len(rows)} records from {csv_path}")
+
 
 class Company(Base):
     __tablename__ = "companies"
@@ -73,6 +74,14 @@ class Company(Base):
     name = Column(String, nullable=False)
     companycode = Column(String, nullable=False, unique=True, index=True)
     password = Column(String, nullable=False)  # hashed password
+
+class StatesCounties(Base):
+    __tablename__ = "states_counties"
+    id = Column(Integer, primary_key=True, index=True)
+    statefips = Column(Integer, nullable=False)
+    state = Column(String, nullable=False)
+    countyfips = Column(Integer, nullable=False)
+    county = Column(String, nullable=False)
 
 class CrmOwner(Base):
     __tablename__ = "crm_owners"
@@ -87,11 +96,14 @@ class CrmOwner(Base):
 
 # Create tables (run once at startup)
 Base.metadata.create_all(bind=engine)
+
+
 # Import CSV once at startup (only if table is empty)
 with SessionLocal() as session:
-    existing_count = session.query(StatesCountiesTable).count()
+    existing_count = session.query(StatesCounties).count()
     if existing_count == 0:
         import_states_counties_from_csv("states_counties.csv", session)
+
 
 # --- Schemas ---
 
@@ -173,6 +185,7 @@ def get_states_counties(db: Session = Depends(get_db)):
     result = db.execute(text("""
         SELECT statefips, state, countyfips, county FROM states_counties
     """)).fetchall()
+
 
     data = {}
     for row in result:

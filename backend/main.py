@@ -77,10 +77,9 @@ class Company(Base):
 
 class StatesCounties(Base):
     __tablename__ = "states_counties"
-    id = Column(Integer, primary_key=True, index=True)
-    statefips = Column(Integer, nullable=False)
+    statefips = Column(Integer, primary_key=True)
     state = Column(String, nullable=False)
-    countyfips = Column(Integer, nullable=False)
+    countyfips = Column(Integer, primary_key=True)
     county = Column(String, nullable=False)
 
 class CrmOwner(Base):

@@ -3,10 +3,13 @@ from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, validator
-from sqlalchemy import create_engine, Column, Integer, String, JSON, text, UniqueConstraint
+from sqlalchemy import create_engine, Column, Integer, String, JSON, text,insert, UniqueConstraint
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from dotenv import load_dotenv
 from passlib.context import CryptContext
+import csv
+from pathlib import Path
+
 
 load_dotenv()  # Load env vars from .env if present
 
@@ -42,6 +45,28 @@ def get_db():
 
 # --- Models ---
 
+
+def import_states_counties_from_csv(csv_path: str, db: Session):
+    if not Path(csv_path).exists():
+        print(f"CSV file not found: {csv_path}")
+        return
+
+    with open(csv_path, newline='') as csvfile:
+        reader = csv.DictReader(csvfile, delimiter=';')
+        rows = []
+        for row in reader:
+            rows.append({
+                "statefips": int(row["StateFIPS"]),
+                "state": row["State"],
+                "countyfips": int(row["CountyFIPS"]),
+                "county": row["County"]
+            })
+
+    if rows:
+        db.execute(insert(StatesCountiesTable), rows)
+        db.commit()
+        print(f"✅ Imported {len(rows)} records from {csv_path}")
+
 class Company(Base):
     __tablename__ = "companies"
     id = Column(Integer, primary_key=True, index=True)
@@ -62,6 +87,11 @@ class CrmOwner(Base):
 
 # Create tables (run once at startup)
 Base.metadata.create_all(bind=engine)
+# Import CSV once at startup (only if table is empty)
+with SessionLocal() as session:
+    existing_count = session.query(StatesCountiesTable).count()
+    if existing_count == 0:
+        import_states_counties_from_csv("states_counties.csv", session)
 
 # --- Schemas ---
 

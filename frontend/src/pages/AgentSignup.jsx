@@ -128,6 +128,7 @@ const handleStateChange = (e) => {
           email: formData.email,
           token: formData.token,
           company_code: formData.company_code,
+          password: formData.password,
           states_counties: selectedSelections
         }),
       });

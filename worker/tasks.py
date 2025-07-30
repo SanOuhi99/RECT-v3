@@ -1,7 +1,7 @@
 # worker/tasks.py
 from celery import Celery
-from worker.worker import celery_app
-from app.tasks.matching import run_matching_algorithm
+from worker import celery_app
+from tasks.matching import run_matching_algorithm
 
 @celery_app.task
 def run_matching_task():

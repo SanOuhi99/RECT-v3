@@ -31,7 +31,7 @@ app = Celery(
     'worker',
     broker=redis_url,
     backend=redis_url,
-    include=['worker.tasks.matching']
+    include=['tasks.matching']
 )
 
 # Production-optimized configuration
@@ -72,7 +72,7 @@ app.conf.update(
               message_ttl=7200),  # 2 hours TTL
     ),
     task_routes={
-        'worker.tasks.matching.run_property_matching': {'queue': 'matching'},
+        'tasks.matching.run_property_matching': {'queue': 'matching'},
     },
     task_default_queue='default',
     task_default_exchange='default',

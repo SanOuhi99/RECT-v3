@@ -1,6 +1,6 @@
 # worker/tasks.py
 from celery import Celery
-from worker import celery_app
+from worker import app
 from tasks.matching import run_matching_algorithm
 
 @celery_app.task

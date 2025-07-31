@@ -22,15 +22,24 @@ export const AuthProvider = ({ children }) => {
     const storedUser = localStorage.getItem('user');
 
     if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
+      try {
+        setToken(storedToken);
+        setUser(JSON.parse(storedUser));
+      } catch (error) {
+        console.error('Error parsing stored user data:', error);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
     }
     setLoading(false);
   }, []);
 
   const login = async (email, password) => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/login`, {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+      console.log('Attempting login to:', `${apiUrl}/login`);
+      
+      const response = await fetch(`${apiUrl}/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -38,12 +47,16 @@ export const AuthProvider = ({ children }) => {
         body: JSON.stringify({ email, password }),
       });
 
+      console.log('Login response status:', response.status);
+
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('Login error:', errorData);
         throw new Error(errorData.detail || 'Login failed');
       }
 
       const data = await response.json();
+      console.log('Login successful');
       
       // Store authentication data
       localStorage.setItem('token', data.access_token);
@@ -54,6 +67,7 @@ export const AuthProvider = ({ children }) => {
       
       return { success: true, user: data.user };
     } catch (error) {
+      console.error('Login error:', error);
       return { success: false, error: error.message };
     }
   };
@@ -72,6 +86,7 @@ export const AuthProvider = ({ children }) => {
 
   // API call helper with authentication
   const apiCall = async (url, options = {}) => {
+    const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
     const headers = {
       'Content-Type': 'application/json',
       ...options.headers,
@@ -81,7 +96,7 @@ export const AuthProvider = ({ children }) => {
       headers.Authorization = `Bearer ${token}`;
     }
 
-    const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}${url}`, {
+    const response = await fetch(`${apiUrl}${url}`, {
       ...options,
       headers,
     });
@@ -112,31 +127,3 @@ export const AuthProvider = ({ children }) => {
     </AuthContext.Provider>
   );
 };
-
-// src/components/ProtectedRoute.js
-import React from 'react';
-import { Navigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-
-const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="spinner-large"></div>
-          <p className="text-gray-600 mt-4">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-
-  return children;
-};
-
-export default ProtectedRoute;

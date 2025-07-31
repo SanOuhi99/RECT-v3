@@ -39,12 +39,14 @@ def should_run_this_month():
 
     # Must be a weekday (Mon–Fri)
     if today.weekday() > 5:
+        print("{today.weekday()} > 5")
         return False
 
     # Is there any earlier weekday this month?
     for i in range(1, today.day):
         d = datetime(today.year, today.month, i)
         if d.weekday() < 5:
+            print("{d.weekday()} < 5")
             return False  # Not first weekday
 
     if current_month == last_run_month:

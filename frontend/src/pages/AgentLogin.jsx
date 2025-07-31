@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import Navbar from '../components/Navbar';
 
 const AgentLogin = () => {
@@ -10,44 +11,36 @@ const AgentLogin = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { login, isAuthenticated } = useAuth();
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
-    try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(credentials),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Login failed');
-      }
-
-      const data = await response.json();
-      
-      // Store authentication data
-      localStorage.setItem('token', data.access_token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-      
-      // Redirect to dashboard
+    const result = await login(credentials.email, credentials.password);
+    
+    if (result.success) {
       navigate('/dashboard');
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    } else {
+      setError(result.error);
     }
+    
+    setLoading(false);
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Keep your exact styling from the original */}
       <style jsx>{`
+        /* Paste all styles from your original AgentLogin.jsx here */
         :root {
           --primary: #2c3e50;
           --secondary: #e74c3c;

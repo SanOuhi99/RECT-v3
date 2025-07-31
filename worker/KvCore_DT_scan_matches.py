@@ -38,7 +38,7 @@ def should_run_this_month():
     last_run_month = int(os.getenv("LAST_RUN_MONTH", "0"))
 
     # Must be a weekday (Mon–Fri)
-    if today.weekday() > 4:
+    if today.weekday() > 5:
         return False
 
     # Is there any earlier weekday this month?

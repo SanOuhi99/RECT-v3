@@ -16,6 +16,7 @@ const App = () => {
         {/* Public routes */}
         <Route path="/" element={<RECTLandingPage />} />
         <Route path="/agent-login" element={<AgentLogin />} />
+        <Route path="/login" element={<AgentLogin />} /> {/* Add this alias */}
         <Route path="/agent-signup" element={<AgentSignup />} />
         
         {/* Protected routes */}
@@ -28,8 +29,15 @@ const App = () => {
           } 
         />
         
-        {/* Admin route - you can add protection here too if needed */}
-        <Route path="/admin" element={<AdminDashboard />} />
+        {/* Admin route */}
+        <Route 
+          path="/admin" 
+          element={
+            <ProtectedRoute>
+              <AdminDashboard />
+            </ProtectedRoute>
+          } 
+        />
         
         {/* Redirect any unknown routes to home */}
         <Route path="*" element={<Navigate to="/" replace />} />

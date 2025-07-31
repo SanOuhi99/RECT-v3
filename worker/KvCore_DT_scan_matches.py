@@ -124,7 +124,7 @@ def get_db():
         pass  # Don't close here, close manually when done
 
 DATA_DIR = "/app/data"
-credentials_FILE = os.path.join(DATA_DIR, "credentials.txt")
+
 DATATREE_BASE_URL = "https://dtapiuat.datatree.com"
 AUTH_ENDPOINT = "/api/Login/AuthenticateClient"
 FETCH_REPORT_ENDPOINT = "/api/Report/GetReport"
@@ -133,22 +133,13 @@ FETCH_PropertySearch_ENDPOINT = "/api/Search/PropertySearch"
 # Ensure the directory exists
 os.makedirs(DATA_DIR, exist_ok=True)
 
-# If the credentials file doesn't exist in Railway Volume, copy it from the repo
-if not os.path.exists(credentials_FILE):
-    shutil.copy("credentials.txt", credentials_FILE)
-    print("Copied credentials.txt to Railway Volume.")
-else:
-    print("credentials.txt exists in Railway Volume.")
-
-with open(credentials_FILE, "r") as f:
-    lines = f.readlines()
-    CLIENT_ID = os.getenv("DATATREE_CLIENT_ID")
-    CLIENT_SECRET = os.getenv("DATATREE_CLIENT_SECRET")
-    SMTP_SERVER = os.getenv("SMTP_SERVER")
-    SMTP_PORT = os.getenv("SMTP_PORT")
-    SENDER_EMAIL = os.getenv("SENDER_EMAIL")
-    SMTP_USERNAME = os.getenv("SMTP_USERNAME")
-    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+CLIENT_ID = os.getenv("DATATREE_CLIENT_ID")
+CLIENT_SECRET = os.getenv("DATATREE_CLIENT_SECRET")
+SMTP_SERVER = os.getenv("SMTP_SERVER")
+SMTP_PORT = os.getenv("SMTP_PORT")
+SENDER_EMAIL = os.getenv("SENDER_EMAIL")
+SMTP_USERNAME = os.getenv("SMTP_USERNAME")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 
 def load_crm_owners():
     """Load CRM owners from the database and ensure they have seen_property_ids as sets."""

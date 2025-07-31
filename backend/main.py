@@ -1,34 +1,55 @@
 import os
 from typing import List, Optional
-from fastapi import FastAPI, Depends,Request, HTTPException
+from datetime import datetime, timedelta
+from fastapi import FastAPI, Depends, Request, HTTPException, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, validator
-from sqlalchemy import create_engine, Column, Integer, String, JSON, text,insert, UniqueConstraint
+from sqlalchemy import create_engine, Column, Integer, String, JSON, text, insert, UniqueConstraint, DateTime, func
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from dotenv import load_dotenv
 from passlib.context import CryptContext
+import jwt
 import csv
 from pathlib import Path
-
-
 
 load_dotenv()  # Load env vars from .env if present
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-this")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_HOURS = 24
+
 if not DATABASE_URL:
     raise Exception("DATABASE_URL environment variable not set")
 
 # Password hashing setup
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+security = HTTPBearer()
 
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return encoded_jwt
+
+def verify_token(token: str):
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 # --- Database setup ---
 engine = create_engine(
@@ -48,7 +69,6 @@ def get_db():
         db.close()
 
 # --- Models ---
-
 
 def import_states_counties_from_csv(csv_path: str, db: Session):
     if not Path(csv_path).exists():
@@ -70,7 +90,6 @@ def import_states_counties_from_csv(csv_path: str, db: Session):
         db.execute(insert(StatesCounties), rows)
         db.commit()
         print(f"✅ Imported {len(rows)} records from {csv_path}")
-
 
 class Company(Base):
     __tablename__ = "companies"
@@ -97,9 +116,25 @@ class CrmOwner(Base):
     seen_property_ids = Column(JSON, nullable=True)
     states_counties = Column(JSON, nullable=True)
 
+class SeenProperties(Base):
+    __tablename__ = "seen_properties"
+    id = Column(Integer, primary_key=True, index=True)
+    crm_owner_id = Column(Integer, nullable=False)
+    property_id = Column(String, nullable=False)
+    owner_name = Column(String)
+    street_address = Column(String)
+    county = Column(String)
+    state = Column(String)
+    seller_name = Column(String)
+    contact_email = Column(String)
+    contact_first_name = Column(String)
+    contact_last_name = Column(String)
+    contact_middle_name = Column(String)
+    name_variation = Column(String)
+    created_at = Column(DateTime, server_default=func.now())
+
 # Create tables (run once at startup)
 Base.metadata.create_all(bind=engine)
-
 
 # Import CSV once at startup (only if table is empty)
 with SessionLocal() as session:
@@ -107,6 +142,19 @@ with SessionLocal() as session:
     if existing_count == 0:
         import_states_counties_from_csv("states_counties.csv", session)
 
+# Authentication dependency
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    token = credentials.credentials
+    payload = verify_token(token)
+    user_id = payload.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    user = db.query(CrmOwner).filter(CrmOwner.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    
+    return user
 
 # --- Schemas ---
 
@@ -171,24 +219,141 @@ class OwnerOut(BaseModel):
     class Config:
         orm_mode = True
 
+class OwnerUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    token: Optional[str] = None
+    states_counties: Optional[List[StateCounties]] = None
+
+# Login schemas
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: OwnerOut
+
+# Seen Properties schemas
+class SeenPropertyOut(BaseModel):
+    id: int
+    crm_owner_id: int
+    property_id: str
+    owner_name: Optional[str] = None
+    street_address: Optional[str] = None
+    county: Optional[str] = None
+    state: Optional[str] = None
+    seller_name: Optional[str] = None
+    contact_email: Optional[str] = None
+    contact_first_name: Optional[str] = None
+    contact_last_name: Optional[str] = None
+    contact_middle_name: Optional[str] = None
+    name_variation: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
 # --- FastAPI app ---
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://frontend-rectenvironment.up.railway.app"],
+    allow_origins=["https://frontend-rectenvironment.up.railway.app", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Authentication endpoints
+@app.post("/login", response_model=LoginResponse)
+def login(login_data: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(CrmOwner).filter(CrmOwner.email == login_data.email).first()
+    if not user or not verify_password(login_data.password, user.password):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    access_token = create_access_token(data={"user_id": user.id})
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user
+    }
+
+@app.get("/me", response_model=OwnerOut)
+def get_current_user_info(current_user: CrmOwner = Depends(get_current_user)):
+    return current_user
+
+@app.put("/me", response_model=OwnerOut)
+def update_current_user(
+    user_update: OwnerUpdate,
+    current_user: CrmOwner = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Update only provided fields
+    if user_update.name is not None:
+        current_user.name = user_update.name
+    if user_update.email is not None:
+        # Check if email is already taken by another user
+        existing = db.query(CrmOwner).filter(
+            CrmOwner.email == user_update.email,
+            CrmOwner.id != current_user.id
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        current_user.email = user_update.email
+    if user_update.token is not None:
+        current_user.token = user_update.token
+    if user_update.states_counties is not None:
+        current_user.states_counties = [sc.dict() for sc in user_update.states_counties]
+    
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+# Seen Properties endpoints
+@app.get("/seen_properties", response_model=List[SeenPropertyOut])
+def get_seen_properties(current_user: CrmOwner = Depends(get_current_user), db: Session = Depends(get_db)):
+    properties = db.query(SeenProperties).filter(
+        SeenProperties.crm_owner_id == current_user.id
+    ).order_by(SeenProperties.created_at.desc()).all()
+    return properties
+
+@app.get("/seen_properties/stats")
+def get_seen_properties_stats(current_user: CrmOwner = Depends(get_current_user), db: Session = Depends(get_db)):
+    total_properties = db.query(SeenProperties).filter(
+        SeenProperties.crm_owner_id == current_user.id
+    ).count()
+    
+    # Get properties by state
+    state_stats = db.execute(text("""
+        SELECT state, COUNT(*) as count 
+        FROM seen_properties 
+        WHERE crm_owner_id = :user_id AND state IS NOT NULL
+        GROUP BY state
+        ORDER BY count DESC
+    """), {"user_id": current_user.id}).fetchall()
+    
+    # Recent properties (last 7 days)
+    recent_properties = db.execute(text("""
+        SELECT COUNT(*) as count
+        FROM seen_properties 
+        WHERE crm_owner_id = :user_id 
+        AND created_at >= NOW() - INTERVAL '7 days'
+    """), {"user_id": current_user.id}).fetchone()
+    
+    return {
+        "total_properties": total_properties,
+        "recent_properties": recent_properties.count if recent_properties else 0,
+        "state_breakdown": [{"state": row.state, "count": row.count} for row in state_stats]
+    }
+
+# Existing endpoints
 @app.get("/states_counties", response_model=List[StateCounties])
 def get_states_counties(db: Session = Depends(get_db)):
-    # Replace with your real table name, adjust query if needed
     result = db.execute(text("""
         SELECT statefips, state, countyfips, county FROM states_counties
     """)).fetchall()
-
 
     data = {}
     for row in result:
@@ -252,6 +417,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         status_code=422,
         content={"detail": exc.errors(), "body": exc.body},
     )
+
 @app.get("/health")
 def health():
     return {"status": "ok"}

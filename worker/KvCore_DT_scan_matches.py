@@ -24,14 +24,38 @@ from dotenv import load_dotenv
 from passlib.context import CryptContext
 from datetime import datetime
 
-# Exit if today is not a weekday (Monday=0, Sunday=6)
-if datetime.today().weekday() > 4:
-    print("Today is weekend. Exiting.")
-    exit(0)
+
 
 # Load environment variables
 load_dotenv()
+def should_run_this_month():
+    today = datetime.today()
 
+    # Get current month number (e.g., 7 for July)
+    current_month = today.month
+
+    # Read last run month from env
+    last_run_month = int(os.getenv("LAST_RUN_MONTH", "0"))
+
+    # Must be a weekday (Mon–Fri)
+    if today.weekday() > 4:
+        return False
+
+    # Is there any earlier weekday this month?
+    for i in range(1, today.day):
+        d = datetime(today.year, today.month, i)
+        if d.weekday() < 5:
+            return False  # Not first weekday
+
+    if current_month == last_run_month:
+        print("Already ran this month.")
+        return False
+
+    return True
+
+if not should_run_this_month():
+    print("Exiting — not first weekday or already ran.")
+    exit(0)
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise Exception("DATABASE_URL environment variable not set")
@@ -362,3 +386,30 @@ def fetch_all_contacts(KVCORE_TOKEN):
         "accept": "application/json",
         "Content-Type": "application/json",
         "authorization": f
+
+
+# --- Update LAST_RUN_MONTH in .env (or print new value if using Railway) ---
+def update_last_run_month():
+    current_month = datetime.today().month
+    os.environ["LAST_RUN_MONTH"] = str(current_month)
+
+    # If you are using a local .env file (dev only), update it
+    dotenv_path = ".env"
+    if os.path.exists(dotenv_path):
+        with open(dotenv_path, "r") as file:
+            lines = file.readlines()
+
+        with open(dotenv_path, "w") as file:
+            found = False
+            for line in lines:
+                if line.startswith("LAST_RUN_MONTH="):
+                    file.write(f"LAST_RUN_MONTH={current_month}\n")
+                    found = True
+                else:
+                    file.write(line)
+            if not found:
+                file.write(f"LAST_RUN_MONTH={current_month}\n")
+
+    print(f"(✓) Updated LAST_RUN_MONTH to {current_month}")
+
+update_last_run_month()

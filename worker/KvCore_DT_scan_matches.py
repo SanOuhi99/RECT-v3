@@ -385,8 +385,389 @@ def fetch_all_contacts(KVCORE_TOKEN):
     headers = {
         "accept": "application/json",
         "Content-Type": "application/json",
-        "authorization": f
+        "authorization": f"Bearer {KVCORE_TOKEN}"
+    }
+    try:
+        scraper = cloudscraper.create_scraper()
+        response = scraper.get(url, headers=headers)
+        response.raise_for_status()
+        return response.json().get("data", [])
+    except Exception as e:
+        print(f"Error fetching contacts: {e}")
+        return []
 
+def fetch_property_details(property_id):
+    """
+    Fetch property details by PropertyId and return specific details.
+    """
+    global auth_token
+    url = DATATREE_BASE_URL + FETCH_REPORT_ENDPOINT
+    headers = {
+        "Authorization": f"Bearer {auth_token}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "ProductNames": ["PropertyDetailReport"],
+        "SearchType": "PROPERTY",
+        "PropertyId": property_id
+    }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        if data.get("Reports"):
+            property_report = data["Reports"][0]
+            report_data = property_report.get("Data", {})
+            subject_property = report_data.get("SubjectProperty", {})
+            owner_info = report_data.get("OwnerInformation", {})
+
+            property_id = subject_property.get("PropertyId", "N/A")
+            street_address = subject_property.get("SitusAddress", {}).get("StreetAddress", "N/A")
+            County = subject_property.get("SitusAddress", {}).get("County", "N/A")
+            State = subject_property.get("SitusAddress", {}).get("State", "N/A")
+            owner_names = owner_info.get("OwnerNames", "N/A")
+            seller_name = report_data.get("OwnerTransferInformation", {}).get("SellerName", "N/A")
+            print(f"PropertyId {property_id} : {owner_names} : {street_address} : {seller_name} : ")
+            if property_id == "N/A" :
+                return None
+            else :
+                return {
+                    "PropertyId": property_id,
+                    "OwnerNames": owner_names,
+                    "StreetAddress": street_address,
+                    "County": County,
+                    "State": State,
+                    "SellerName": seller_name
+                }
+        else:
+            print(f"PropertyId {property_id}: No report found.")
+            return None
+    except Exception as e:
+        print(f"Error fetching property details for PropertyId {property_id}: {e}")
+        return None
+
+def generate_name_variations(first_name, middle_name, last_name):
+    """
+    Generate various name combinations and partials for flexible search.
+    """
+    # Ensure inputs are strings and alphabetic
+    first_name = str(first_name).strip() if first_name else ""
+    middle_name = str(middle_name).strip() if middle_name else ""
+    last_name = str(last_name).strip() if last_name else ""
+
+    # Validate names
+    if not (first_name.isalpha() and last_name.isalpha() and (middle_name.isalpha() or not middle_name)):
+        print(f"Invalid name: {last_name} {middle_name} {first_name}")
+        return []
+
+    # Exclude specific keywords
+    if first_name.lower() in ["","."," ","user", "new","street" , "avenue"] or last_name.lower() in ["","."," ","user", "new","street" , "avenue"]:
+        print(f"Invalid name: {last_name} {middle_name} {first_name}")
+        return []
+
+    variations = []
+    if middle_name :
+        variations.append(f"{first_name} {middle_name} {last_name}")
+        variations.append(f"{first_name} {last_name} {middle_name}")
+        variations.append(f"{first_name} {last_name}")
+        variations.append(f"{first_name} {middle_name}")
+
+        variations.append(f"{last_name} {middle_name} {first_name}")
+        variations.append(f"{last_name} {first_name} {middle_name}")
+        variations.append(f"{last_name} {middle_name}")
+        variations.append(f"{last_name} {first_name}")
+
+        variations.append(f"{middle_name} {last_name} {first_name}")
+        variations.append(f"{middle_name} {first_name} {last_name}")
+        variations.append(f"{middle_name} {last_name}")
+        variations.append(f"{middle_name} {first_name}")
+    else :
+        if len(last_name) > 1:
+            if len(first_name) >= 3:
+                for i in range(3, len(first_name) + 1):
+                    variations.append(f"{last_name} {first_name[:i]}")
+                    variations.append(f"{first_name[:i]} {last_name}")
+            elif len(first_name) == 2 and len(last_name) > 2:
+                variations.append(f"{first_name[:2]} {last_name}")
+        elif len(first_name) > 2:
+            variations.append(f"{last_name} {first_name}")
+            variations.append(f"{first_name} {last_name}")
+    print(f"all case use for searching : {variations}")
+    
+    return variations
+
+def fetch_report_from_datatree(state_fips, county_fips, crm_owner, contact_details):
+    """
+    Fetch property reports from DataTree API using multiple name variations.
+    """
+    global auth_token
+    data_collection = []
+    all_results = []
+    url = DATATREE_BASE_URL + FETCH_REPORT_ENDPOINT
+    headers = {
+        "Authorization": f"Bearer {auth_token}",
+        "Content-Type": "application/json"
+    }
+    six_months_ago = datetime.now() - timedelta(days=6*30.5)  # Approximate 6 months as 180 days
+    formatted_date = six_months_ago.strftime('%Y-%m-%d')  # Format date as 'YYYY-MM-DD'
+
+    name_variations = generate_name_variations(contact_details['first_name'], contact_details['middle_name'], contact_details['last_name'])
+    for name_filter in name_variations:
+        filters = [
+            {"FilterName": "SellerName", "FilterOperator": "contains", "FilterValues": [name_filter]},
+            {"FilterName": "SaleDate", "FilterOperator": "is after", "FilterValues": [formatted_date]}
+        ]
+        
+        if state_fips:
+            filters.append({"FilterName": "StateFips", "FilterOperator": "is", "FilterValues": [state_fips]})
+        if county_fips:
+            filters.append({"FilterName": "CountyFips", "FilterOperator": "is", "FilterValues": [county_fips]})
+        
+        payload = {
+            "ProductNames": [
+            "PropertyDetailReport"
+          ],
+          "SearchType": "Filter",
+          "SearchRequest": {
+            "ReferenceId": "1",
+            "ProductName": "SearchLite",
+            "MaxReturn": "100",
+            "Filters": filters}
+        }
+        print(f"Fetching with payload: {payload}")
+        try:
+            response = requests.post(url, json=payload, headers=headers)
+            if response.status_code == 400:
+                error_response = response.json()
+                if error_response.get("Message") == "No matching property found.":
+                    print(f"No properties found for SellerName filter '{name_filter}'.")
+                    continue  # Skip to next name_filter
+                else:
+                    print(f"400 Error for SellerName '{name_filter}': {error_response}")
+                    continue
+            response.raise_for_status()
+            data = response.json()
+            print(f"API Response: {data}")
+            
+            if "LitePropertyList" in data and data["LitePropertyList"]:
+                all_results.extend(data["LitePropertyList"])
+            else:
+                print(f"No properties found for filter: {name_filter} as Seller")
+                
+        except Exception as e:
+            print(f"Error fetching report for name filter '{name_filter}': {e}")
+
+        filters = [
+            {"FilterName": "OwnerNames", "FilterOperator": "contains", "FilterValues": [name_filter]},
+            {"FilterName": "SaleDate", "FilterOperator": "is after", "FilterValues": [formatted_date]}
+        ]
+        
+        if state_fips:
+            filters.append({"FilterName": "StateFips", "FilterOperator": "is", "FilterValues": [state_fips]})
+        if county_fips:
+            filters.append({"FilterName": "CountyFips", "FilterOperator": "is", "FilterValues": [county_fips]})
+        
+        print(f"Fetching with payload: {payload}")
+        try:
+            response = requests.post(url, json=payload, headers=headers)
+            if response.status_code == 400:
+                error_response = response.json()
+                if error_response.get("Message") == "No matching property found.":
+                    print(f"No properties found for OwnerNames filter '{name_filter}'.")
+                    continue
+                else:
+                    print(f"400 Error for OwnerNames '{name_filter}': {error_response}")
+                    continue
+            response.raise_for_status()
+            data = response.json()
+            print(f"API Response: {data}")
+            
+            if "LitePropertyList" in data and data["LitePropertyList"]:
+                all_results.extend(data["LitePropertyList"])
+            else:
+                print(f"No properties found for filter: {name_filter} as Owner")
+                
+        except Exception as e:
+            print(f"Error fetching report for name filter '{name_filter}': {e}")
+
+        # Remove duplicates by PropertyId using a set
+        unique_results = []
+        for property_data in all_results:
+            property_id = property_data.get("PropertyId")
+            if property_id and property_id not in crm_owner['seen_property_ids']:
+                crm_owner['seen_property_ids'].add(property_id)
+                unique_results.append(property_data)
+
+        print(f"Unique results after filtering for {contact_details['first_name']} {contact_details['last_name']}: {unique_results}")
+        
+        # Collecting the property details
+        for property_data in unique_results:
+            property_id = property_data.get("PropertyId")
+            if property_id:
+                property_details = fetch_property_details(property_id)
+                if property_details:
+                    data_row = {
+                        "First Name": contact_details['first_name'],
+                        "Middle Name": contact_details['middle_name'],
+                        "Last Name": contact_details['last_name'],
+                        "Email": contact_details['email'],
+                        "Name Variation": name_filter,
+                        "State": property_details["State"],
+                        "County": property_details["County"],
+                        "Property ID": property_details["PropertyId"],
+                        "Owner Name": property_details["OwnerNames"],
+                        "Street Address": property_details["StreetAddress"],
+                        "Seller Name": property_details["SellerName"]
+                    }
+                    data_collection.append(data_row)
+                    
+                    # Save to seen_properties table
+                    save_property_to_seen_properties(crm_owner['id'], data_row, contact_details)
+    
+    print(f"Fetched results for {contact_details['first_name']} {contact_details['last_name']} : {all_results}")
+    print(f"Collected data for {contact_details['first_name']} {contact_details['last_name']} in {state_fips}/{county_fips} under {crm_owner['Name']} : {data_collection}")
+    
+    return data_collection
+
+def search_datatree_thread():
+    """
+    Start the search process for each CRM owner using a ThreadPoolExecutor.
+    Limits the number of concurrent threads to a maximum of 5.
+    """
+    MAX_THREADS = 5
+    result_queue = queue.Queue()  # Thread-safe queue to collect results
+
+    def process_crm_owner_wrapper(CRM_owner):
+        """Wrapper function to process CRM owners and store results."""
+        process_crm_owner(CRM_owner, result_queue)  # Your existing function
+
+    # Use ThreadPoolExecutor to manage threads
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
+        future_to_owner = {executor.submit(process_crm_owner_wrapper, CRM_owner): CRM_owner for CRM_owner in CRM_owners}
+
+        for future in concurrent.futures.as_completed(future_to_owner):
+            CRM_owner = future_to_owner[future]
+            try:
+                future.result()  # Raise exceptions if any occur in threads
+            except Exception as e:
+                print(f"(X) Error processing {CRM_owner['Name']}: {e}")
+
+    # Collect results after all threads complete
+    while not result_queue.empty():
+        CRM_owner_name, owner_results = result_queue.get()
+        
+def process_crm_owner(CRM_owner, result_queue):
+    """
+    Fetch contacts and start searches, tracking seen properties per CRM owner.
+    """
+    contacts = fetch_all_contacts(CRM_owner['token'])
+    MAX_THREADS=10
+    contact_threads = []
+    contact_result_queue = queue.Queue()
+    states_counties = CRM_owner.get("states_counties", [])
+    
+    def search_for_contact_wrapper(contact, contact_result_queue, CRM_owner, states_counties):
+        """Wrapper function to process Contact and store results."""
+        search_for_contact(contact, contact_result_queue, CRM_owner, states_counties)
+
+    # Use ThreadPoolExecutor to manage threads
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
+        future_to_contact = {executor.submit(search_for_contact_wrapper, contact, contact_result_queue, CRM_owner, states_counties): contact for contact in contacts}
+
+        for future in concurrent.futures.as_completed(future_to_contact):
+            contact = future_to_contact[future]
+            try:
+                future.result()  # Raise exceptions if any occur in threads
+            except Exception as e:
+                print(f"(X) Error processing contact for {CRM_owner['Name']}: {e}")
+
+    # Collect and save updated property IDs for this CRM owner
+    owner_results = []
+    while not contact_result_queue.empty():
+        owner_results.extend(contact_result_queue.get())
+
+    print(f"Collected owner_results for {CRM_owner['Name']}: {owner_results}")
+
+    # Save only this owner's updated `seen_property_ids`
+    save_seen_property_ids(CRM_owner)
+
+    if owner_results:
+        result_queue.put((CRM_owner['Name'], owner_results))
+        save_to_excel(owner_results, CRM_owner)
+
+def search_for_contact(contact, contact_result_queue, crm_owner, states_counties):
+    """
+    Process a single contact while tracking seen properties and filtering by states_counties.
+    Runs `perform_search_for_contact()` as a separate thread for each state/county.
+    If `states_counties` is missing or empty, search without filtering.
+    """
+    contact_details = {
+        'first_name': contact.get('name', '').split()[0] if ' ' in contact.get('name', '') else "",
+        'middle_name': contact.get('name', '').split()[1] if len(contact.get('name', '').split()) == 3 else "",
+        'last_name': contact.get('name', '').split()[-1] if len(contact.get('name', '').split()) > 1 else contact.get('name'),
+        'email': contact.get('email', '')
+    }
+
+    # If no states_counties, search without filters
+    if not states_counties:
+        print(f"No state/county filter for {contact_details['first_name']} {contact_details['last_name']}. Searching all states/counties.")
+        state_result_queue = queue.Queue()
+        perform_search_for_contact(contact_details, None, None, crm_owner, state_result_queue)
+
+        contact_properties = []
+        while not state_result_queue.empty():
+            contact_properties.extend(state_result_queue.get())
+
+    else:
+        # Launch threads for each state/county
+        threads = []
+        state_result_queues = []
+
+        for state_county in states_counties:
+            # Handle both old format (state_FIPS/county_FIPS) and new format (state_fips/county_fips)
+            state_fips = state_county.get("state_FIPS") or state_county.get("state_fips")
+            county_fips = state_county.get("county_FIPS") or state_county.get("county_fips")
+
+            state_result_queue = queue.Queue()
+            state_result_queues.append(state_result_queue)
+
+            thread = threading.Thread(target=perform_search_for_contact, args=(contact_details, state_fips, county_fips, crm_owner, state_result_queue))
+            threads.append(thread)
+            thread.start()
+
+        # Wait for all threads to finish
+        for thread in threads:
+            thread.join()
+
+        # Collect results
+        contact_properties = []
+        for result_queue in state_result_queues:
+            while not result_queue.empty():
+                contact_properties.extend(result_queue.get())
+
+    # Remove already seen properties
+    new_properties = [prop for prop in contact_properties if prop["Property ID"]]
+
+    # Update seen properties
+    for prop in new_properties:
+        crm_owner['seen_property_ids'].add(prop["Property ID"])
+
+    if new_properties:
+        contact_result_queue.put(new_properties)
+
+def perform_search_for_contact(contact_details, state_fips, county_fips, crm_owner, result_queue):
+    """
+    Fetch search results for a specific contact in a given state and county.
+    Results are added to `result_queue` to allow multi-threaded execution.
+    Now passing the entire CRM_owner to access `seen_property_ids`.
+    """
+    print(f"Searching for {contact_details['first_name']} {contact_details['last_name']} in State FIPS: {state_fips}, County FIPS: {county_fips}")
+
+    results = fetch_report_from_datatree(state_fips, county_fips, crm_owner, contact_details)  # Fetch data
+
+    if results:
+        result_queue.put(results)  # Store results in the queue
 
 # --- Update LAST_RUN_MONTH in .env (or print new value if using Railway) ---
 def update_last_run_month():
@@ -412,4 +793,6 @@ def update_last_run_month():
 
     print(f"(✓) Updated LAST_RUN_MONTH to {current_month}")
 
-update_last_run_month()
+if __name__ == "__main__":
+    search_datatree_thread()
+    update_last_run_month()

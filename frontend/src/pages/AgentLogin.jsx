@@ -1,3 +1,4 @@
+// Enhanced AgentLogin.jsx with debugging
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,6 +11,7 @@ const AgentLogin = () => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [debugInfo, setDebugInfo] = useState('');
   const navigate = useNavigate();
   const { login, isAuthenticated } = useAuth();
 
@@ -24,23 +26,58 @@ const AgentLogin = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setDebugInfo('');
 
-    const result = await login(credentials.email, credentials.password);
-    
-    if (result.success) {
-      navigate('/dashboard');
-    } else {
-      setError(result.error);
+    console.log('=== LOGIN DEBUG START ===');
+    console.log('Form submitted with credentials:', {
+      email: credentials.email,
+      password: credentials.password ? '[PROVIDED]' : '[EMPTY]'
+    });
+
+    try {
+      // Add debug info about the API URL
+      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+      console.log('API URL being used:', API_URL);
+      setDebugInfo(`Attempting login to: ${API_URL}/login`);
+
+      // Test basic connectivity first
+      try {
+        const healthCheck = await fetch(`${API_URL}/health`);
+        console.log('Health check response:', healthCheck.status);
+        if (!healthCheck.ok) {
+          throw new Error(`Health check failed: ${healthCheck.status}`);
+        }
+      } catch (healthError) {
+        console.error('Health check failed:', healthError);
+        setError(`Cannot connect to server: ${healthError.message}`);
+        setLoading(false);
+        return;
+      }
+
+      // Attempt login
+      console.log('Calling login function...');
+      const result = await login(credentials.email, credentials.password);
+      console.log('Login result:', result);
+      
+      if (result.success) {
+        console.log('Login successful, navigating to dashboard');
+        navigate('/dashboard');
+      } else {
+        console.log('Login failed:', result.error);
+        setError(result.error || 'Login failed');
+      }
+    } catch (error) {
+      console.error('Login error caught:', error);
+      setError(`Login error: ${error.message}`);
+    } finally {
+      setLoading(false);
+      console.log('=== LOGIN DEBUG END ===');
     }
-    
-    setLoading(false);
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Keep your exact styling from the original */}
       <style jsx>{`
-        /* Paste all styles from your original AgentLogin.jsx here */
         :root {
           --primary: #2c3e50;
           --secondary: #e74c3c;
@@ -76,6 +113,17 @@ const AgentLogin = () => {
           margin-bottom: 16px;
         }
         
+        .debug-info {
+          background: #e3f2fd;
+          border: 1px solid #90caf9;
+          color: #1565c0;
+          padding: 12px;
+          border-radius: 8px;
+          margin-bottom: 16px;
+          font-family: monospace;
+          font-size: 12px;
+        }
+        
         .spinner {
           border: 2px solid #f3f3f3;
           border-top: 2px solid #e74c3c;
@@ -102,11 +150,26 @@ const AgentLogin = () => {
               Agent Login
             </h2>
             
-            {error && (
-              <div className="error-message">
-                {error}
+            {/* Debug Information */}
+            {debugInfo && (
+              <div className="debug-info">
+                <strong>Debug Info:</strong><br />
+                {debugInfo}
               </div>
             )}
+            
+            {error && (
+              <div className="error-message">
+                <strong>Error:</strong> {error}
+              </div>
+            )}
+            
+            {/* Test Credentials for Development */}
+            <div className="bg-yellow-50 border border-yellow-200 p-3 rounded mb-4 text-sm">
+              <strong>For Testing:</strong><br />
+              Current API URL: {process.env.REACT_APP_API_URL || 'http://localhost:8000'}<br />
+              Make sure you have a valid user account created first.
+            </div>
             
             <form onSubmit={handleSubmit}>
               <div className="mb-6">
@@ -118,6 +181,7 @@ const AgentLogin = () => {
                   onChange={(e) => setCredentials({...credentials, email: e.target.value})}
                   required
                   disabled={loading}
+                  placeholder="Enter your email"
                 />
               </div>
               <div className="mb-8">
@@ -129,6 +193,7 @@ const AgentLogin = () => {
                   onChange={(e) => setCredentials({...credentials, password: e.target.value})}
                   required
                   disabled={loading}
+                  placeholder="Enter your password"
                 />
               </div>
               <button
@@ -140,6 +205,16 @@ const AgentLogin = () => {
                 {loading ? 'Signing In...' : 'Sign In'}
               </button>
             </form>
+
+            {/* Debug Section - Remove in production */}
+            <div className="mt-6 p-4 bg-gray-50 rounded text-xs">
+              <strong>Debug Info:</strong><br />
+              Email: {credentials.email || '(empty)'}<br />
+              Password: {credentials.password ? '(provided)' : '(empty)'}<br />
+              Loading: {loading ? 'true' : 'false'}<br />
+              Is Authenticated: {isAuthenticated ? 'true' : 'false'}<br />
+              Environment: {process.env.NODE_ENV || 'development'}
+            </div>
           </div>
         </div>
       </section>

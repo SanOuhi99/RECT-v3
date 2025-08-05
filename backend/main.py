@@ -1,5 +1,5 @@
 import os
-from typing import List, Optional
+from typing import List, Optional,Dict, Any
 from datetime import datetime, timedelta
 from fastapi import FastAPI, Depends, Request, HTTPException, status
 from fastapi.exceptions import RequestValidationError
@@ -410,6 +410,278 @@ def create_owner(owner: OwnerCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_owner)
     return db_owner
+
+# Add this new endpoint for token validation
+@app.get("/validate-token")
+def validate_token(current_user: CrmOwner = Depends(get_current_user)):
+    """
+    Validate the current token and return user info.
+    This endpoint is useful for checking if a session is still valid.
+    """
+    return {
+        "valid": True,
+        "user": {
+            "id": current_user.id,
+            "name": current_user.name,
+            "email": current_user.email,
+            "companycode": current_user.companycode,
+            "states_counties": current_user.states_counties
+        },
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+# Enhanced seen properties endpoint with filtering and pagination
+@app.get("/seen_properties/paginated")
+def get_seen_properties_paginated(
+    page: int = 1,
+    page_size: int = 20,
+    state: str = None,
+    county: str = None,
+    days_back: int = None,
+    current_user: CrmOwner = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get seen properties with pagination and filtering options.
+    """
+    query = db.query(SeenProperties).filter(
+        SeenProperties.crm_owner_id == current_user.id
+    )
+    
+    # Apply filters
+    if state:
+        query = query.filter(SeenProperties.state.ilike(f"%{state}%"))
+    
+    if county:
+        query = query.filter(SeenProperties.county.ilike(f"%{county}%"))
+    
+    if days_back:
+        cutoff_date = datetime.utcnow() - timedelta(days=days_back)
+        query = query.filter(SeenProperties.created_at >= cutoff_date)
+    
+    # Get total count
+    total = query.count()
+    
+    # Apply pagination
+    offset = (page - 1) * page_size
+    properties = query.order_by(SeenProperties.created_at.desc()).offset(offset).limit(page_size).all()
+    
+    return {
+        "properties": properties,
+        "pagination": {
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "total_pages": (total + page_size - 1) // page_size,
+            "has_next": page * page_size < total,
+            "has_prev": page > 1
+        }
+    }
+
+# Enhanced stats endpoint with more detailed analytics
+@app.get("/seen_properties/analytics")
+def get_detailed_analytics(
+    current_user: CrmOwner = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get detailed analytics about seen properties.
+    """
+    base_query = db.query(SeenProperties).filter(
+        SeenProperties.crm_owner_id == current_user.id
+    )
+    
+    # Total properties
+    total_properties = base_query.count()
+    
+    # Properties by time periods
+    now = datetime.utcnow()
+    last_7_days = base_query.filter(SeenProperties.created_at >= now - timedelta(days=7)).count()
+    last_30_days = base_query.filter(SeenProperties.created_at >= now - timedelta(days=30)).count()
+    last_90_days = base_query.filter(SeenProperties.created_at >= now - timedelta(days=90)).count()
+    
+    # State breakdown with more details
+    state_stats = db.execute(text("""
+        SELECT 
+            state, 
+            COUNT(*) as count,
+            COUNT(DISTINCT county) as unique_counties,
+            AVG(EXTRACT(DAY FROM (NOW() - created_at))) as avg_days_old
+        FROM seen_properties 
+        WHERE crm_owner_id = :user_id AND state IS NOT NULL
+        GROUP BY state
+        ORDER BY count DESC
+    """), {"user_id": current_user.id}).fetchall()
+    
+    # County breakdown
+    county_stats = db.execute(text("""
+        SELECT 
+            county,
+            state,
+            COUNT(*) as count
+        FROM seen_properties 
+        WHERE crm_owner_id = :user_id AND county IS NOT NULL
+        GROUP BY county, state
+        ORDER BY count DESC
+        LIMIT 10
+    """), {"user_id": current_user.id}).fetchall()
+    
+    # Monthly trend (last 6 months)
+    monthly_stats = db.execute(text("""
+        SELECT 
+            DATE_TRUNC('month', created_at) as month,
+            COUNT(*) as count
+        FROM seen_properties 
+        WHERE crm_owner_id = :user_id 
+        AND created_at >= NOW() - INTERVAL '6 months'
+        GROUP BY DATE_TRUNC('month', created_at)
+        ORDER BY month DESC
+    """), {"user_id": current_user.id}).fetchall()
+    
+    # Properties with contact info
+    properties_with_contacts = base_query.filter(
+        SeenProperties.contact_email.isnot(None)
+    ).count()
+    
+    return {
+        "summary": {
+            "total_properties": total_properties,
+            "last_7_days": last_7_days,
+            "last_30_days": last_30_days,
+            "last_90_days": last_90_days,
+            "properties_with_contacts": properties_with_contacts,
+            "contact_rate": round((properties_with_contacts / total_properties * 100), 2) if total_properties > 0 else 0
+        },
+        "state_breakdown": [
+            {
+                "state": row.state,
+                "count": row.count,
+                "unique_counties": row.unique_counties,
+                "avg_days_old": round(row.avg_days_old, 1) if row.avg_days_old else 0
+            }
+            for row in state_stats
+        ],
+        "top_counties": [
+            {
+                "county": row.county,
+                "state": row.state,
+                "count": row.count
+            }
+            for row in county_stats
+        ],
+        "monthly_trend": [
+            {
+                "month": row.month.strftime("%Y-%m") if row.month else None,
+                "count": row.count
+            }
+            for row in monthly_stats
+        ]
+    }
+
+# Endpoint to get user's activity summary
+@app.get("/user/activity-summary")
+def get_user_activity_summary(
+    current_user: CrmOwner = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get a summary of user's recent activity and system status.
+    """
+    # Recent properties (last 5)
+    recent_properties = db.query(SeenProperties).filter(
+        SeenProperties.crm_owner_id == current_user.id
+    ).order_by(SeenProperties.created_at.desc()).limit(5).all()
+    
+    # Get user's assigned states/counties count
+    states_count = len(current_user.states_counties) if current_user.states_counties else 0
+    counties_count = sum(
+        len(state.get('counties', [])) 
+        for state in (current_user.states_counties or [])
+    )
+    
+    # Last activity timestamp
+    last_activity = db.query(SeenProperties.created_at).filter(
+        SeenProperties.crm_owner_id == current_user.id
+    ).order_by(SeenProperties.created_at.desc()).first()
+    
+    return {
+        "user_info": {
+            "id": current_user.id,
+            "name": current_user.name,
+            "email": current_user.email,
+            "companycode": current_user.companycode,
+            "assigned_states": states_count,
+            "assigned_counties": counties_count
+        },
+        "recent_properties": [
+            {
+                "id": prop.id,
+                "property_id": prop.property_id,
+                "street_address": prop.street_address,
+                "county": prop.county,
+                "state": prop.state,
+                "created_at": prop.created_at,
+                "days_ago": (datetime.utcnow() - prop.created_at).days
+            }
+            for prop in recent_properties
+        ],
+        "last_activity": last_activity[0].isoformat() if last_activity and last_activity[0] else None,
+        "session_info": {
+            "current_time": datetime.utcnow().isoformat(),
+            "timezone": "UTC"
+        }
+    }
+
+# Add error handling middleware
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """
+    Handle unexpected errors and return a proper JSON response.
+    """
+    print(f"Unexpected error: {exc}")  # Log the error
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "An unexpected error occurred. Please try again later.",
+            "error_type": type(exc).__name__
+        }
+    )
+
+# Health check with database connectivity
+@app.get("/health/detailed")
+def detailed_health_check(db: Session = Depends(get_db)):
+    """
+    Detailed health check including database connectivity.
+    """
+    try:
+        # Test database connection
+        db.execute(text("SELECT 1"))
+        
+        # Get basic stats
+        total_users = db.query(CrmOwner).count()
+        total_companies = db.query(Company).count()
+        total_properties = db.query(SeenProperties).count()
+        
+        return {
+            "status": "healthy",
+            "timestamp": datetime.utcnow().isoformat(),
+            "database": "connected",
+            "stats": {
+                "total_users": total_users,
+                "total_companies": total_companies,
+                "total_properties": total_properties
+            }
+        }
+    except Exception as e:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unhealthy",
+                "timestamp": datetime.utcnow().isoformat(),
+                "database": "disconnected",
+                "error": str(e)
+            }
+        )
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):

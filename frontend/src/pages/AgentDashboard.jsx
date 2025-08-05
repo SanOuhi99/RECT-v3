@@ -1,125 +1,121 @@
+// frontend/src/pages/AgentDashboard.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import Navbar from '../components/Navbar';
 
 const AgentDashboard = () => {
-  const [user, setUser] = useState(null);
   const [properties, setProperties] = useState([]);
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState({});
+  const [error, setError] = useState('');
+
+  const { 
+    user, 
+    logout, 
+    updateProfile, 
+    fetchSeenProperties, 
+    fetchDashboardStats,
+    fetchUserData 
+  } = useAuth();
+  
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      navigate('/login');
-      return;
+    if (user) {
+      initializeDashboard();
     }
+  }, [user]);
 
-    fetchUserData();
-    fetchProperties();
-    fetchStats();
-  }, [navigate]);
-
-  const fetchUserData = async () => {
+  const initializeDashboard = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/me`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      setLoading(true);
+      setError('');
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch user data');
-      }
+      // Fetch user data to ensure we have the latest info
+      await fetchUserData();
 
-      const userData = await response.json();
-      setUser(userData);
+      // Fetch properties and stats in parallel
+      await Promise.all([
+        loadProperties(),
+        loadStats()
+      ]);
+
+      // Initialize edit form
       setEditForm({
-        name: userData.name,
-        email: userData.email,
-        token: userData.token,
-      });
-    } catch (error) {
-      console.error('Error fetching user data:', error);
-      localStorage.removeItem('token');
-      navigate('/login');
-    }
-  };
-
-  const fetchProperties = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/seen_properties`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        name: user.name,
+        email: user.email,
+        token: user.token,
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setProperties(data);
-      }
     } catch (error) {
-      console.error('Error fetching properties:', error);
-    }
-  };
-
-  const fetchStats = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/seen_properties/stats`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
-      }
-    } catch (error) {
-      console.error('Error fetching stats:', error);
+      console.error('Error initializing dashboard:', error);
+      setError('Failed to load dashboard data. Please try refreshing the page.');
     } finally {
       setLoading(false);
     }
   };
 
+  const loadProperties = async () => {
+    try {
+      const data = await fetchSeenProperties();
+      setProperties(data || []);
+    } catch (error) {
+      console.error('Error fetching properties:', error);
+      setError('Failed to load properties');
+    }
+  };
+
+  const loadStats = async () => {
+    try {
+      const data = await fetchDashboardStats();
+      setStats(data || {});
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+      setError('Failed to load statistics');
+    }
+  };
+
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/me`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(editForm),
-      });
+    setLoading(true);
+    setError('');
 
-      if (response.ok) {
-        const updatedUser = await response.json();
-        setUser(updatedUser);
+    try {
+      const result = await updateProfile(editForm);
+      
+      if (result.success) {
         setEditMode(false);
         alert('Profile updated successfully!');
       } else {
-        throw new Error('Failed to update profile');
+        setError(result.error || 'Failed to update profile');
       }
     } catch (error) {
       console.error('Error updating profile:', error);
-      alert('Failed to update profile');
+      setError('Failed to update profile');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    logout();
     navigate('/login');
+  };
+
+  const refreshData = async () => {
+    setLoading(true);
+    try {
+      await Promise.all([loadProperties(), loadStats()]);
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+      setError('Failed to refresh data');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const formatDate = (dateString) => {
@@ -132,11 +128,24 @@ const AgentDashboard = () => {
     });
   };
 
-  if (loading) {
+  const getPropertyStatusColor = (daysAgo) => {
+    if (daysAgo <= 7) return 'bg-green-100 text-green-800';
+    if (daysAgo <= 30) return 'bg-yellow-100 text-yellow-800';
+    return 'bg-gray-100 text-gray-800';
+  };
+
+  const getDaysAgo = (dateString) => {
+    const propertyDate = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now - propertyDate);
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
+  if (loading && !user) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="spinner-large"></div>
+          <div className="spinner-large animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto"></div>
           <p className="text-gray-600 mt-4">Loading dashboard...</p>
         </div>
       </div>
@@ -146,64 +155,6 @@ const AgentDashboard = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <style jsx>{`
-        :root {
-          --primary: #2c3e50;
-          --secondary: #e74c3c;
-          --accent: #3498db;
-          --light: #ecf0f1;
-          --dark: #2c3e50;
-        }
-        
-        .feature-card {
-          transition: all 0.3s ease;
-        }
-        
-        .feature-card:hover {
-          transform: translateY(-5px);
-          box-shadow: 0 10px 25px rgba(0,0,0,0.15);
-        }
-        
-        .btn-primary-custom {
-          background: linear-gradient(135deg, #e74c3c, #c0392b);
-          border: none;
-          transition: all 0.3s ease;
-          box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
-        }
-        
-        .btn-primary-custom:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(231, 76, 60, 0.4);
-        }
-        
-        .btn-secondary {
-          background: #6c757d;
-          color: white;
-          border: none;
-          transition: all 0.3s ease;
-        }
-        
-        .btn-secondary:hover {
-          background: #5a6268;
-        }
-        
-        .tab-button {
-          padding: 12px 24px;
-          border: none;
-          background: transparent;
-          color: #6c757d;
-          border-bottom: 2px solid transparent;
-          transition: all 0.3s ease;
-        }
-        
-        .tab-button.active {
-          color: #e74c3c;
-          border-bottom-color: #e74c3c;
-        }
-        
-        .tab-button:hover {
-          color: #e74c3c;
-        }
-        
         .spinner-large {
           border: 4px solid #f3f3f3;
           border-top: 4px solid #e74c3c;
@@ -220,11 +171,6 @@ const AgentDashboard = () => {
         }
         
         .property-card {
-          background: white;
-          border-radius: 12px;
-          padding: 20px;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-          margin-bottom: 16px;
           transition: all 0.3s ease;
         }
         
@@ -232,12 +178,35 @@ const AgentDashboard = () => {
           transform: translateY(-2px);
           box-shadow: 0 4px 15px rgba(0,0,0,0.15);
         }
+        
+        .tab-button {
+          padding: 12px 24px;
+          border: none;
+          background: transparent;
+          color: #6c757d;
+          border-bottom: 2px solid transparent;
+          transition: all 0.3s ease;
+        }
+        
+        .tab-button.active {
+          color: #e74c3c;
+          border-bottom-color: #e74c3c;
+        }
+        
+        .stat-card {
+          transition: all 0.3s ease;
+        }
+        
+        .stat-card:hover {
+          transform: translateY(-5px);
+          box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        }
       `}</style>
 
       <Navbar />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
+        {/* Header with Error Display */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
           <div className="flex justify-between items-center">
             <div>
@@ -247,13 +216,27 @@ const AgentDashboard = () => {
               <p className="text-gray-600 mt-2">
                 Company: {user?.companycode} | Email: {user?.email}
               </p>
+              {error && (
+                <div className="mt-3 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                  {error}
+                </div>
+              )}
             </div>
-            <button
-              onClick={handleLogout}
-              className="btn-secondary px-4 py-2 rounded-lg"
-            >
-              Logout
-            </button>
+            <div className="flex space-x-3">
+              <button
+                onClick={refreshData}
+                disabled={loading}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {loading ? 'Refreshing...' : 'Refresh'}
+              </button>
+              <button
+                onClick={handleLogout}
+                className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </div>
 
@@ -270,7 +253,7 @@ const AgentDashboard = () => {
               className={`tab-button ${activeTab === 'properties' ? 'active' : ''}`}
               onClick={() => setActiveTab('properties')}
             >
-              Seen Properties
+              Seen Properties ({properties.length})
             </button>
             <button
               className={`tab-button ${activeTab === 'profile' ? 'active' : ''}`}
@@ -284,9 +267,9 @@ const AgentDashboard = () => {
           {activeTab === 'dashboard' && (
             <div className="p-6">
               <div className="grid md:grid-cols-3 gap-6 mb-8">
-                <div className="feature-card bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-6 text-center border-t-4 border-blue-600">
+                <div className="stat-card bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-6 text-center border-t-4 border-blue-600">
                   <div className="text-4xl text-blue-600 mb-4">
-                    <i className="fas fa-home"></i>
+                    🏠
                   </div>
                   <h3 className="text-2xl font-bold text-gray-900 mb-2">
                     Total Properties
@@ -295,9 +278,9 @@ const AgentDashboard = () => {
                   <p className="text-gray-600 mt-2">Properties viewed</p>
                 </div>
 
-                <div className="feature-card bg-gradient-to-br from-green-50 to-green-100 rounded-2xl p-6 text-center border-t-4 border-green-600">
+                <div className="stat-card bg-gradient-to-br from-green-50 to-green-100 rounded-2xl p-6 text-center border-t-4 border-green-600">
                   <div className="text-4xl text-green-600 mb-4">
-                    <i className="fas fa-calendar-week"></i>
+                    📅
                   </div>
                   <h3 className="text-2xl font-bold text-gray-900 mb-2">
                     Recent Activity
@@ -306,9 +289,9 @@ const AgentDashboard = () => {
                   <p className="text-gray-600 mt-2">Last 7 days</p>
                 </div>
 
-                <div className="feature-card bg-gradient-to-br from-red-50 to-red-100 rounded-2xl p-6 text-center border-t-4 border-red-600">
+                <div className="stat-card bg-gradient-to-br from-red-50 to-red-100 rounded-2xl p-6 text-center border-t-4 border-red-600">
                   <div className="text-4xl text-red-600 mb-4">
-                    <i className="fas fa-map-marker-alt"></i>
+                    📍
                   </div>
                   <h3 className="text-2xl font-bold text-gray-900 mb-2">
                     Active States
@@ -334,6 +317,40 @@ const AgentDashboard = () => {
                   </div>
                 </div>
               )}
+
+              {/* Recent Properties Preview */}
+              {properties.length > 0 && (
+                <div className="bg-white rounded-xl p-6 shadow-lg mt-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-bold text-gray-900">Recent Properties</h3>
+                    <button
+                      onClick={() => setActiveTab('properties')}
+                      className="text-red-600 hover:text-red-700 font-medium"
+                    >
+                      View All →
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    {properties.slice(0, 5).map((property) => (
+                      <div key={property.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {property.street_address || 'Address not available'}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {property.county}, {property.state}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPropertyStatusColor(getDaysAgo(property.created_at))}`}>
+                            {getDaysAgo(property.created_at)} days ago
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -344,21 +361,26 @@ const AgentDashboard = () => {
                 <h3 className="text-2xl font-bold text-gray-900">
                   Your Seen Properties ({properties.length})
                 </h3>
+                <button
+                  onClick={refreshData}
+                  disabled={loading}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {loading ? 'Loading...' : 'Refresh'}
+                </button>
               </div>
 
               {properties.length === 0 ? (
                 <div className="text-center py-12">
-                  <div className="text-6xl text-gray-300 mb-4">
-                    <i className="fas fa-home"></i>
-                  </div>
+                  <div className="text-6xl text-gray-300 mb-4">🏠</div>
                   <h4 className="text-xl font-medium text-gray-600 mb-2">No properties yet</h4>
-                  <p className="text-gray-500">Start viewing properties to see them here.</p>
+                  <p className="text-gray-500">Your property matches will appear here when the system finds them.</p>
                 </div>
               ) : (
                 <div className="space-y-4 max-h-96 overflow-y-auto">
                   {properties.map((property) => (
-                    <div key={property.id} className="property-card">
-                      <div className="flex justify-between items-start mb-3">
+                    <div key={property.id} className="property-card bg-white rounded-lg p-6 shadow-md">
+                      <div className="flex justify-between items-start mb-4">
                         <div>
                           <h4 className="text-lg font-bold text-gray-900">
                             {property.street_address || 'Address not available'}
@@ -367,12 +389,17 @@ const AgentDashboard = () => {
                             {property.county}, {property.state}
                           </p>
                         </div>
-                        <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
-                          ID: {property.property_id}
-                        </span>
+                        <div className="text-right">
+                          <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                            ID: {property.property_id}
+                          </span>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {formatDate(property.created_at)}
+                          </p>
+                        </div>
                       </div>
                       
-                      <div className="grid md:grid-cols-2 gap-4 mb-3">
+                      <div className="grid md:grid-cols-2 gap-4 mb-4">
                         <div>
                           <p className="text-sm text-gray-600">Owner Name</p>
                           <p className="font-medium">{property.owner_name || 'N/A'}</p>
@@ -383,19 +410,33 @@ const AgentDashboard = () => {
                         </div>
                       </div>
 
-                      {property.contact_email && (
-                        <div className="mb-3">
-                          <p className="text-sm text-gray-600">Contact</p>
-                          <p className="font-medium">
-                            {property.contact_first_name} {property.contact_last_name}
-                          </p>
-                          <p className="text-sm text-blue-600">{property.contact_email}</p>
+                      {(property.contact_email || property.contact_first_name) && (
+                        <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                          <p className="text-sm text-gray-600 mb-2">Contact Information</p>
+                          <div className="grid md:grid-cols-2 gap-4">
+                            <div>
+                              <p className="font-medium">
+                                {[property.contact_first_name, property.contact_middle_name, property.contact_last_name]
+                                  .filter(Boolean)
+                                  .join(' ') || 'N/A'}
+                              </p>
+                              {property.contact_email && (
+                                <p className="text-sm text-blue-600">{property.contact_email}</p>
+                              )}
+                            </div>
+                            {property.name_variation && (
+                              <div>
+                                <p className="text-sm text-gray-600">Name Variation</p>
+                                <p className="font-medium">{property.name_variation}</p>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
 
-                      <div className="flex justify-between items-center pt-3 border-t border-gray-200">
-                        <span className="text-sm text-gray-500">
-                          Viewed: {formatDate(property.created_at)}
+                      <div className="flex justify-between items-center pt-4 border-t border-gray-200">
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getPropertyStatusColor(getDaysAgo(property.created_at))}`}>
+                          {getDaysAgo(property.created_at)} days ago
                         </span>
                       </div>
                     </div>
@@ -422,7 +463,11 @@ const AgentDashboard = () => {
                         });
                       }
                     }}
-                    className={`px-4 py-2 rounded-lg ${editMode ? 'btn-secondary' : 'btn-primary-custom'}`}
+                    className={`px-4 py-2 rounded-lg transition-colors ${
+                      editMode 
+                        ? 'bg-gray-600 text-white hover:bg-gray-700' 
+                        : 'bg-red-600 text-white hover:bg-red-700'
+                    }`}
                   >
                     {editMode ? 'Cancel' : 'Edit Profile'}
                   </button>
@@ -438,6 +483,7 @@ const AgentDashboard = () => {
                         value={editForm.name}
                         onChange={(e) => setEditForm({...editForm, name: e.target.value})}
                         required
+                        disabled={loading}
                       />
                     </div>
                     <div>
@@ -448,6 +494,7 @@ const AgentDashboard = () => {
                         value={editForm.email}
                         onChange={(e) => setEditForm({...editForm, email: e.target.value})}
                         required
+                        disabled={loading}
                       />
                     </div>
                     <div>
@@ -458,19 +505,22 @@ const AgentDashboard = () => {
                         value={editForm.token}
                         onChange={(e) => setEditForm({...editForm, token: e.target.value})}
                         required
+                        disabled={loading}
                       />
                     </div>
                     <div className="flex space-x-4">
                       <button
                         type="submit"
-                        className="btn-primary-custom px-6 py-3 rounded-lg text-white"
+                        disabled={loading}
+                        className="bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
                       >
-                        Save Changes
+                        {loading ? 'Saving...' : 'Save Changes'}
                       </button>
                       <button
                         type="button"
                         onClick={() => setEditMode(false)}
-                        className="btn-secondary px-6 py-3 rounded-lg"
+                        disabled={loading}
+                        className="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"
                       >
                         Cancel
                       </button>
@@ -528,6 +578,29 @@ const AgentDashboard = () => {
                         </div>
                       </div>
                     )}
+
+                    {/* Session Information */}
+                    <div className="bg-gray-50 p-6 rounded-xl">
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4">Session Information</h4>
+                      <div className="grid md:grid-cols-2 gap-6">
+                        <div>
+                          <p className="text-sm text-gray-600 mb-1">User ID</p>
+                          <p className="text-lg font-medium text-gray-900">{user.id}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600 mb-1">Last Login</p>
+                          <p className="text-lg font-medium text-gray-900">
+                            {new Date().toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

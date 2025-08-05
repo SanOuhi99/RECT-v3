@@ -1,49 +1,107 @@
-// src/App.jsx
+// frontend/src/App.jsx
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
-import ProtectedRoute from './components/ProtectedRoute';
-import RECTLandingPage from './RECTLandingPage';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+
+// Import your components
+import Homepage from './pages/Homepage';
 import AgentLogin from './pages/AgentLogin';
 import AgentSignup from './pages/AgentSignup';
 import AgentDashboard from './pages/AgentDashboard';
-import AdminDashboard from './pages/AdminDashboard';
+import CompanySignup from './pages/CompanySignup';
 
-const App = () => {
+// Protected Route Component
+const ProtectedRoute = ({ children }) => {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="spinner-large animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto"></div>
+          <p className="text-gray-600 mt-4">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return isAuthenticated ? children : <Navigate to="/login" replace />;
+};
+
+// Public Route Component (redirect to dashboard if already logged in)
+const PublicRoute = ({ children }) => {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="spinner-large animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto"></div>
+          <p className="text-gray-600 mt-4">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return !isAuthenticated ? children : <Navigate to="/dashboard" replace />;
+};
+
+function AppContent() {
+  return (
+    <Router>
+      <div className="App">
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/" element={<Homepage />} />
+          <Route 
+            path="/login" 
+            element={
+              <PublicRoute>
+                <AgentLogin />
+              </PublicRoute>
+            } 
+          />
+          <Route 
+            path="/signup" 
+            element={
+              <PublicRoute>
+                <AgentSignup />
+              </PublicRoute>
+            } 
+          />
+          <Route 
+            path="/company-signup" 
+            element={
+              <PublicRoute>
+                <CompanySignup />
+              </PublicRoute>
+            } 
+          />
+          
+          {/* Protected Routes */}
+          <Route 
+            path="/dashboard" 
+            element={
+              <ProtectedRoute>
+                <AgentDashboard />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Catch all route - redirect to home */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
+    </Router>
+  );
+}
+
+function App() {
   return (
     <AuthProvider>
-      <Routes>
-        {/* Public routes */}
-        <Route path="/" element={<RECTLandingPage />} />
-        <Route path="/agent-login" element={<AgentLogin />} />
-        <Route path="/login" element={<AgentLogin />} /> {/* Add this alias */}
-        <Route path="/agent-signup" element={<AgentSignup />} />
-        
-        {/* Protected routes */}
-        <Route 
-          path="/dashboard" 
-          element={
-            <ProtectedRoute>
-              <AgentDashboard />
-            </ProtectedRoute>
-          } 
-        />
-        
-        {/* Admin route */}
-        <Route 
-          path="/admin" 
-          element={
-            <ProtectedRoute>
-              <AdminDashboard />
-            </ProtectedRoute>
-          } 
-        />
-        
-        {/* Redirect any unknown routes to home */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <AppContent />
     </AuthProvider>
   );
-};
+}
 
 export default App;

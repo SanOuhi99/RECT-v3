@@ -3,3 +3,4 @@ uvicorn[standard]==0.30
 sqlalchemy
 psycopg2
 passlib
+PyJWT

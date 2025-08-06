@@ -8,7 +8,7 @@ import RECTLandingPage from './RECTLandingPage';
 import AgentLogin from './pages/AgentLogin';
 import AgentSignup from './pages/AgentSignup';
 import AgentDashboard from './pages/AgentDashboard';
-import CompanySignup from './pages/CompanySignup';
+
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -69,14 +69,7 @@ function AppContent() {
               </PublicRoute>
             } 
           />
-          <Route 
-            path="/company-signup" 
-            element={
-              <PublicRoute>
-                <CompanySignup />
-              </PublicRoute>
-            } 
-          />
+
           
           {/* Protected Routes */}
           <Route 

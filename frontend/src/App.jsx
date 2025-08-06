@@ -54,7 +54,7 @@ function AppContent() {
           {/* Public Routes */}
           <Route path="/" element={<RECTLandingPage />} />
           <Route 
-            path="/login" 
+            path="//agent-Login" 
             element={
               <PublicRoute>
                 <AgentLogin />
@@ -62,7 +62,7 @@ function AppContent() {
             } 
           />
           <Route 
-            path="/signup" 
+            path="//agent-signup" 
             element={
               <PublicRoute>
                 <AgentSignup />

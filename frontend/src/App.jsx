@@ -52,7 +52,7 @@ function AppContent() {
       <div className="App">
         <Routes>
           {/* Public Routes */}
-          <Route path="/" element={<Homepage />} />
+          <Route path="/" element={<RECTLandingPage />} />
           <Route 
             path="/login" 
             element={

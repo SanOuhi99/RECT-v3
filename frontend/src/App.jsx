@@ -4,7 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 // Import your components
-import Homepage from './pages/Homepage';
+import RECTLandingPage from './RECTLandingPage';
 import AgentLogin from './pages/AgentLogin';
 import AgentSignup from './pages/AgentSignup';
 import AgentDashboard from './pages/AgentDashboard';

@@ -128,18 +128,21 @@ const AgentDashboard = () => {
     });
   };
 
-  const getPropertyStatusColor = (daysAgo) => {
-    if (daysAgo <= 7) return 'bg-green-100 text-green-800';
-    if (daysAgo <= 30) return 'bg-yellow-100 text-yellow-800';
-    return 'bg-gray-100 text-gray-800';
-  };
+const getDaysAgo = (property) => {
+  // Use contract_date if available, otherwise fall back to created_at
+  const dateToUse = property.contract_date || property.created_at;
+  const propertyDate = new Date(dateToUse);
+  const now = new Date();
+  const diffTime = Math.abs(now - propertyDate);
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+};
 
-  const getDaysAgo = (dateString) => {
-    const propertyDate = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now - propertyDate);
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  };
+const getPropertyStatusColor = (property) => {
+  const daysAgo = getDaysAgo(property);
+  if (daysAgo <= 7) return 'bg-green-100 text-green-800';
+  if (daysAgo <= 30) return 'bg-yellow-100 text-yellow-800';
+  return 'bg-gray-100 text-gray-800';
+};
 
   if (loading && !user) {
     return (
@@ -342,8 +345,8 @@ const AgentDashboard = () => {
                           </p>
                         </div>
                         <div className="text-right">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPropertyStatusColor(getDaysAgo(property.created_at))}`}>
-                            {getDaysAgo(property.created_at)} days ago
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPropertyStatusColor(property)}`}>
+                            {getDaysAgo(property)} days ago
                           </span>
                         </div>
                       </div>
@@ -409,7 +412,12 @@ const AgentDashboard = () => {
                           <p className="font-medium">{property.seller_name || 'N/A'}</p>
                         </div>
                       </div>
-
+                      {property.contract_date && (
+                        <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+                          <p className="text-sm text-blue-600 mb-1">Contract Date</p>
+                          <p className="font-medium">{formatDate(property.contract_date)}</p>
+                        </div>
+                      )}
                       {(property.contact_email || property.contact_first_name) && (
                         <div className="mb-4 p-4 bg-gray-50 rounded-lg">
                           <p className="text-sm text-gray-600 mb-2">Contact Information</p>
@@ -435,8 +443,8 @@ const AgentDashboard = () => {
                       )}
 
                       <div className="flex justify-between items-center pt-4 border-t border-gray-200">
-                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getPropertyStatusColor(getDaysAgo(property.created_at))}`}>
-                          {getDaysAgo(property.created_at)} days ago
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getPropertyStatusColor(property)}`}>
+                          {getDaysAgo(property)} days ago
                         </span>
                       </div>
                     </div>

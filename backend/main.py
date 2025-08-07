@@ -319,52 +319,7 @@ def update_current_user(
     db.refresh(current_user)
     return current_user
 
-# Seen Properties endpoints
-@app.get("/seen_properties", response_model=List[SeenPropertyOut])
-def get_seen_properties(current_user: CrmOwner = Depends(get_current_user), db: Session = Depends(get_db)):
-    properties = db.query(SeenProperties).filter(
-        SeenProperties.crm_owner_id == current_user.id
-    ).order_by(SeenProperties.created_at.desc()).all()
-    return properties
 
-@app.get("/seen_properties/stats")
-def get_seen_properties_stats(current_user: CrmOwner = Depends(get_current_user), db: Session = Depends(get_db)):
-    total_properties = db.query(SeenProperties).filter(
-        SeenProperties.crm_owner_id == current_user.id
-    ).count()
-    
-    # Get properties by state
-    state_stats = db.execute(text("""
-        SELECT state, COUNT(*) as count 
-        FROM seen_properties 
-        WHERE crm_owner_id = :user_id AND state IS NOT NULL
-        GROUP BY state
-        ORDER BY count DESC
-    """), {"user_id": current_user.id}).fetchall()
-    
-    # Recent properties added to system (last 7 days) - use created_at
-    recent_properties = db.execute(text("""
-        SELECT COUNT(*) as count
-        FROM seen_properties 
-        WHERE crm_owner_id = :user_id 
-        AND created_at >= NOW() - INTERVAL '7 days'
-    """), {"user_id": current_user.id}).fetchone()
-    
-    # Properties with recent contracts (last 30 days) - use contract_date
-    recent_contracts = db.execute(text("""
-        SELECT COUNT(*) as count
-        FROM seen_properties 
-        WHERE crm_owner_id = :user_id 
-        AND contract_date IS NOT NULL
-        AND contract_date >= NOW() - INTERVAL '30 days'
-    """), {"user_id": current_user.id}).fetchone()
-    
-    return {
-        "total_properties": total_properties,
-        "recent_properties": recent_properties.count if recent_properties else 0,
-        "recent_contracts": recent_contracts.count if recent_contracts else 0,
-        "state_breakdown": [{"state": row.state, "count": row.count} for row in state_stats]
-    }
 # Existing endpoints
 @app.get("/states_counties", response_model=List[StateCounties])
 def get_states_counties(db: Session = Depends(get_db)):
@@ -446,8 +401,53 @@ def validate_token(current_user: CrmOwner = Depends(get_current_user)):
         },
         "timestamp": datetime.utcnow().isoformat()
     }
+# Seen Properties endpoints
+@app.get("/seen_properties", response_model=List[SeenPropertyOut])
+def get_seen_properties(current_user: CrmOwner = Depends(get_current_user), db: Session = Depends(get_db)):
+    properties = db.query(SeenProperties).filter(
+        SeenProperties.crm_owner_id == current_user.id
+    ).order_by(SeenProperties.created_at.desc()).all()
+    return properties
 
-# Enhanced seen properties endpoint with filtering and pagination
+@app.get("/seen_properties/stats")
+def get_seen_properties_stats(current_user: CrmOwner = Depends(get_current_user), db: Session = Depends(get_db)):
+    total_properties = db.query(SeenProperties).filter(
+        SeenProperties.crm_owner_id == current_user.id
+    ).count()
+    
+    # Get properties by state
+    state_stats = db.execute(text("""
+        SELECT state, COUNT(*) as count 
+        FROM seen_properties 
+        WHERE crm_owner_id = :user_id AND state IS NOT NULL
+        GROUP BY state
+        ORDER BY count DESC
+    """), {"user_id": current_user.id}).fetchall()
+    
+    # Recent properties added to system (last 7 days) - use created_at
+    recent_properties = db.execute(text("""
+        SELECT COUNT(*) as count
+        FROM seen_properties 
+        WHERE crm_owner_id = :user_id 
+        AND created_at >= NOW() - INTERVAL '7 days'
+    """), {"user_id": current_user.id}).fetchone()
+    
+    # Properties with recent contracts (last 30 days) - use contract_date
+    recent_contracts = db.execute(text("""
+        SELECT COUNT(*) as count
+        FROM seen_properties 
+        WHERE crm_owner_id = :user_id 
+        AND contract_date IS NOT NULL
+        AND contract_date >= NOW() - INTERVAL '30 days'
+    """), {"user_id": current_user.id}).fetchone()
+    
+    return {
+        "total_properties": total_properties,
+        "recent_properties": recent_properties.count if recent_properties else 0,
+        "recent_contracts": recent_contracts.count if recent_contracts else 0,
+        "state_breakdown": [{"state": row.state, "count": row.count} for row in state_stats]
+    }
+
 @app.get("/seen_properties/paginated")
 def get_seen_properties_paginated(
     page: int = 1,
@@ -507,7 +507,6 @@ def get_seen_properties_paginated(
         }
     }
 
-# Enhanced stats endpoint with more detailed analytics
 @app.get("/seen_properties/analytics")
 def get_detailed_analytics(
     current_user: CrmOwner = Depends(get_current_user),
@@ -661,7 +660,6 @@ def get_detailed_analytics(
         ]
     }
 
-# Endpoint to get user's activity summary
 @app.get("/user/activity-summary")
 def get_user_activity_summary(
     current_user: CrmOwner = Depends(get_current_user),

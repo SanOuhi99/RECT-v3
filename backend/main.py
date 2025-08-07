@@ -236,10 +236,12 @@ class LoginResponse(BaseModel):
     user: OwnerOut
 
 # Seen Properties schemas
+# Replace your SeenPropertyOut schema in backend/main.py with this updated version
+
 class SeenPropertyOut(BaseModel):
     id: int
     crm_owner_id: int
-    property_id: str
+    property_id: str  # This will auto-convert integers to strings
     owner_name: Optional[str] = None
     street_address: Optional[str] = None
     county: Optional[str] = None
@@ -251,6 +253,13 @@ class SeenPropertyOut(BaseModel):
     contact_middle_name: Optional[str] = None
     name_variation: Optional[str] = None
     created_at: datetime
+
+    # Add this validator to handle integer property_ids
+    @validator('property_id', pre=True)
+    def convert_property_id_to_string(cls, v):
+        if v is not None:
+            return str(v)
+        return v
 
     class Config:
         orm_mode = True

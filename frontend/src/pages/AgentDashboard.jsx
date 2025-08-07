@@ -1,5 +1,4 @@
-// frontend/src/pages/AgentDashboard.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import Navbar from '../components/Navbar';
@@ -8,10 +7,16 @@ const AgentDashboard = () => {
   const [properties, setProperties] = useState([]);
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState({});
   const [error, setError] = useState('');
+  const [lastRefresh, setLastRefresh] = useState(null);
+
+  // Refs to prevent stale closure issues
+  const refreshIntervalRef = useRef(null);
+  const isInitializedRef = useRef(false);
 
   const { 
     user, 
@@ -24,60 +29,103 @@ const AgentDashboard = () => {
   
   const navigate = useNavigate();
 
-  useEffect(() => {
-    if (user) {
-      initializeDashboard();
-    }
-  }, [user]);
-
-  const initializeDashboard = async () => {
+  // Memoized data loading functions to prevent unnecessary re-renders
+  const loadProperties = useCallback(async () => {
     try {
-      setLoading(true);
-      setError('');
+      const data = await fetchSeenProperties();
+      setProperties(data || []);
+      return true;
+    } catch (error) {
+      console.error('Error fetching properties:', error);
+      setError('Failed to load properties');
+      return false;
+    }
+  }, [fetchSeenProperties]);
 
-      // Fetch user data to ensure we have the latest info
+  const loadStats = useCallback(async () => {
+    try {
+      const data = await fetchDashboardStats();
+      setStats(data || {});
+      return true;
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+      setError('Failed to load statistics');
+      return false;
+    }
+  }, [fetchDashboardStats]);
+
+  // Combined data loading function
+  const loadDashboardData = useCallback(async (isManualRefresh = false) => {
+    if (!user) return;
+
+    // Don't show loading spinner for auto-refresh
+    if (isManualRefresh || initialLoading) {
+      setLoading(true);
+    }
+    
+    setError('');
+
+    try {
+      // Ensure we have the latest user data
       await fetchUserData();
 
-      // Fetch properties and stats in parallel
+      // Load data in parallel
       await Promise.all([
         loadProperties(),
         loadStats()
       ]);
 
-      // Initialize edit form
-      setEditForm({
-        name: user.name,
-        email: user.email,
-        token: user.token,
-      });
+      // Initialize edit form only once
+      if (!isInitializedRef.current) {
+        setEditForm({
+          name: user.name,
+          email: user.email,
+          token: user.token,
+        });
+        isInitializedRef.current = true;
+      }
+
+      setLastRefresh(new Date());
 
     } catch (error) {
-      console.error('Error initializing dashboard:', error);
+      console.error('Error loading dashboard data:', error);
       setError('Failed to load dashboard data. Please try refreshing the page.');
     } finally {
       setLoading(false);
+      setInitialLoading(false);
     }
-  };
+  }, [user, fetchUserData, loadProperties, loadStats, initialLoading]);
 
-  const loadProperties = async () => {
-    try {
-      const data = await fetchSeenProperties();
-      setProperties(data || []);
-    } catch (error) {
-      console.error('Error fetching properties:', error);
-      setError('Failed to load properties');
+  // Initial load - only run once when user is available
+  useEffect(() => {
+    if (user && !isInitializedRef.current) {
+      loadDashboardData();
     }
-  };
+  }, [user]); // Only depend on user, not loadDashboardData
 
-  const loadStats = async () => {
-    try {
-      const data = await fetchDashboardStats();
-      setStats(data || {});
-    } catch (error) {
-      console.error('Error fetching stats:', error);
-      setError('Failed to load statistics');
+  // Auto-refresh timer - 15 minutes
+  useEffect(() => {
+    // Clear any existing interval
+    if (refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
     }
-  };
+
+    // Only set up auto-refresh if user is logged in and initial load is complete
+    if (user && !initialLoading) {
+      refreshIntervalRef.current = setInterval(() => {
+        console.log('Auto-refreshing dashboard data...');
+        loadDashboardData(false); // false = not manual refresh (no loading spinner)
+      }, 15 * 60 * 1000); // 15 minutes
+    }
+
+    // Cleanup on unmount or when dependencies change
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+        refreshIntervalRef.current = null;
+      }
+    };
+  }, [user, initialLoading, loadDashboardData]);
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
@@ -102,20 +150,18 @@ const AgentDashboard = () => {
   };
 
   const handleLogout = () => {
+    // Clear the refresh interval
+    if (refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
+      refreshIntervalRef.current = null;
+    }
     logout();
     navigate('/login');
   };
 
-  const refreshData = async () => {
-    setLoading(true);
-    try {
-      await Promise.all([loadProperties(), loadStats()]);
-    } catch (error) {
-      console.error('Error refreshing data:', error);
-      setError('Failed to refresh data');
-    } finally {
-      setLoading(false);
-    }
+  // Manual refresh function
+  const handleManualRefresh = async () => {
+    await loadDashboardData(true); // true = manual refresh (show loading spinner)
   };
 
   const formatDate = (dateString) => {
@@ -129,20 +175,19 @@ const AgentDashboard = () => {
     });
   };
 
-const getDaysAgo = (property) => {
+  const getDaysAgo = (property) => {
     // Use contract_date if available, otherwise fall back to created_at
     const dateToUse = property.contract_date || property.created_at;
     if (!dateToUse) return 0;
     
     const propertyDate = new Date(dateToUse);
     const now = new Date();
-    const diffTime = now - propertyDate; // Don't use Math.abs - we want actual difference
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)); // Use Math.floor, not Math.ceil
+    const diffTime = now - propertyDate;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     
-    return Math.max(0, diffDays); // Ensure we don't return negative days
+    return Math.max(0, diffDays);
   };
 
-  // Get the label for days ago calculation
   const getDaysAgoLabel = (property) => {
     const daysAgo = getDaysAgo(property);
     const dateType = property.contract_date ? 'contract' : 'added';
@@ -158,24 +203,23 @@ const getDaysAgo = (property) => {
 
   const getPropertyStatusColor = (property) => {
     const daysAgo = getDaysAgo(property);
-    if (daysAgo === 0) return 'bg-blue-100 text-blue-800'; // Today
-    if (daysAgo <= 7) return 'bg-green-100 text-green-800'; // This week
-    if (daysAgo <= 30) return 'bg-yellow-100 text-yellow-800'; // This month
-    return 'bg-gray-100 text-gray-800'; // Older
+    if (daysAgo === 0) return 'bg-blue-100 text-blue-800';
+    if (daysAgo <= 7) return 'bg-green-100 text-green-800';
+    if (daysAgo <= 30) return 'bg-yellow-100 text-yellow-800';
+    return 'bg-gray-100 text-gray-800';
   };
 
-  const handleUpdateProfile = async (e) => {
-    e.preventDefault();
-    // Mock profile update
-    console.log('Updating profile:', editForm);
-    setEditMode(false);
-  };
-
-  const refreshData = async () => {
-    setLoading(true);
-    // Mock refresh
-    setTimeout(() => setLoading(false), 1000);
-  };
+  // Show initial loading screen only on first load
+  if (initialLoading && !user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="spinner-large animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto"></div>
+          <p className="text-gray-600 mt-4">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -226,12 +270,27 @@ const getDaysAgo = (property) => {
           transform: translateY(-5px);
           box-shadow: 0 10px 25px rgba(0,0,0,0.15);
         }
+
+        .refresh-indicator {
+          opacity: 0.7;
+          font-size: 0.75rem;
+        }
+
+        .auto-refresh-indicator {
+          background: linear-gradient(45deg, #10b981, #059669);
+          animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.7; }
+        }
       `}</style>
 
       <Navbar />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header with Error Display */}
+        {/* Header with Error Display and Last Refresh Info */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
           <div className="flex justify-between items-center">
             <div>
@@ -241,6 +300,12 @@ const getDaysAgo = (property) => {
               <p className="text-gray-600 mt-2">
                 Company: {user?.companycode} | Email: {user?.email}
               </p>
+              {lastRefresh && (
+                <p className="text-sm text-gray-500 mt-1 flex items-center">
+                  <span className="w-2 h-2 bg-green-500 rounded-full mr-2 auto-refresh-indicator"></span>
+                  Last updated: {lastRefresh.toLocaleTimeString()} • Auto-refresh every 15 minutes
+                </p>
+              )}
               {error && (
                 <div className="mt-3 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
                   {error}
@@ -249,11 +314,23 @@ const getDaysAgo = (property) => {
             </div>
             <div className="flex space-x-3">
               <button
-                onClick={refreshData}
+                onClick={handleManualRefresh}
                 disabled={loading}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center"
               >
-                {loading ? 'Refreshing...' : 'Refresh'}
+                {loading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Refreshing...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Refresh
+                  </>
+                )}
               </button>
               <button
                 onClick={handleLogout}
@@ -291,36 +368,31 @@ const getDaysAgo = (property) => {
           {/* Dashboard Tab */}
           {activeTab === 'dashboard' && (
             <div className="p-6">
-              <div className="grid md:grid-cols-3 gap-6 mb-8">
+              <div className="grid md:grid-cols-4 gap-6 mb-8">
                 <div className="stat-card bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-6 text-center border-t-4 border-blue-600">
-                  <div className="text-4xl text-blue-600 mb-4">
-                    🏠
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                    Total Properties
-                  </h3>
+                  <div className="text-4xl text-blue-600 mb-4">🏠</div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">Total Properties</h3>
                   <p className="text-3xl font-bold text-blue-600">{stats.total_properties || 0}</p>
                   <p className="text-gray-600 mt-2">Properties viewed</p>
                 </div>
 
                 <div className="stat-card bg-gradient-to-br from-green-50 to-green-100 rounded-2xl p-6 text-center border-t-4 border-green-600">
-                  <div className="text-4xl text-green-600 mb-4">
-                    📅
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                    Recent Activity
-                  </h3>
+                  <div className="text-4xl text-green-600 mb-4">📅</div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">Recent Activity</h3>
                   <p className="text-3xl font-bold text-green-600">{stats.recent_properties || 0}</p>
-                  <p className="text-gray-600 mt-2">Last 7 days</p>
+                  <p className="text-gray-600 mt-2">Added last 7 days</p>
+                </div>
+
+                <div className="stat-card bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl p-6 text-center border-t-4 border-purple-600">
+                  <div className="text-4xl text-purple-600 mb-4">📋</div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">Recent Contracts</h3>
+                  <p className="text-3xl font-bold text-purple-600">{stats.recent_contracts || 0}</p>
+                  <p className="text-gray-600 mt-2">Contracts last 30 days</p>
                 </div>
 
                 <div className="stat-card bg-gradient-to-br from-red-50 to-red-100 rounded-2xl p-6 text-center border-t-4 border-red-600">
-                  <div className="text-4xl text-red-600 mb-4">
-                    📍
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                    Active States
-                  </h3>
+                  <div className="text-4xl text-red-600 mb-4">📍</div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">Active States</h3>
                   <p className="text-3xl font-bold text-red-600">{stats.state_breakdown?.length || 0}</p>
                   <p className="text-gray-600 mt-2">States covered</p>
                 </div>
@@ -365,10 +437,16 @@ const getDaysAgo = (property) => {
                           <p className="text-sm text-gray-600">
                             {property.county}, {property.state}
                           </p>
+                          <div className="text-xs text-gray-500 mt-1">
+                            <div>Added: {formatDate(property.created_at)}</div>
+                            {property.contract_date && (
+                              <div>Contract: {formatDate(property.contract_date)}</div>
+                            )}
+                          </div>
                         </div>
                         <div className="text-right">
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPropertyStatusColor(property)}`}>
-                            {getDaysAgo(property)} days ago
+                            {getDaysAgoLabel(property)}
                           </span>
                         </div>
                       </div>
@@ -387,11 +465,18 @@ const getDaysAgo = (property) => {
                   Your Seen Properties ({properties.length})
                 </h3>
                 <button
-                  onClick={refreshData}
+                  onClick={handleManualRefresh}
                   disabled={loading}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center"
                 >
-                  {loading ? 'Loading...' : 'Refresh'}
+                  {loading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Loading...
+                    </>
+                  ) : (
+                    'Refresh'
+                  )}
                 </button>
               </div>
 
@@ -402,7 +487,7 @@ const getDaysAgo = (property) => {
                   <p className="text-gray-500">Your property matches will appear here when the system finds them.</p>
                 </div>
               ) : (
-                <div className="space-y-4 max-h-96 overflow-y-auto">
+                <div className="space-y-4">
                   {properties.map((property) => (
                     <div key={property.id} className="property-card bg-white rounded-lg p-6 shadow-md">
                       <div className="flex justify-between items-start mb-4">
@@ -418,9 +503,6 @@ const getDaysAgo = (property) => {
                           <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
                             ID: {property.property_id}
                           </span>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {formatDate(property.created_at)}
-                          </p>
                         </div>
                       </div>
                       
@@ -434,12 +516,29 @@ const getDaysAgo = (property) => {
                           <p className="font-medium">{property.seller_name || 'N/A'}</p>
                         </div>
                       </div>
-                      {property.contract_date && (
-                        <div className="mb-4 p-4 bg-blue-50 rounded-lg">
-                          <p className="text-sm text-blue-600 mb-1">Contract Date</p>
-                          <p className="font-medium">{formatDate(property.contract_date)}</p>
+
+                      {/* Date Information Section */}
+                      <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                        <div className="grid md:grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-600 mb-1">Added to System</p>
+                            <p className="font-medium">{formatDate(property.created_at)}</p>
+                            <p className="text-xs text-green-600">
+                              {getDaysAgo({created_at: property.created_at})} days ago
+                            </p>
+                          </div>
+                          {property.contract_date && (
+                            <div className="p-3 bg-blue-50 rounded-lg">
+                              <p className="text-sm text-blue-600 mb-1">Contract Date</p>
+                              <p className="font-medium">{formatDate(property.contract_date)}</p>
+                              <p className="text-xs text-blue-600">
+                                {getDaysAgo({contract_date: property.contract_date})} days ago
+                              </p>
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
+
                       {(property.contact_email || property.contact_first_name) && (
                         <div className="mb-4 p-4 bg-gray-50 rounded-lg">
                           <p className="text-sm text-gray-600 mb-2">Contact Information</p>
@@ -466,8 +565,11 @@ const getDaysAgo = (property) => {
 
                       <div className="flex justify-between items-center pt-4 border-t border-gray-200">
                         <span className={`px-3 py-1 rounded-full text-sm font-medium ${getPropertyStatusColor(property)}`}>
-                          {getDaysAgo(property)} days ago
+                          {getDaysAgoLabel(property)}
                         </span>
+                        <div className="text-xs text-gray-500">
+                          Priority: {property.contract_date ? 'Contract Date' : 'System Date'}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -510,7 +612,7 @@ const getDaysAgo = (property) => {
                       <input
                         type="text"
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 outline-none"
-                        value={editForm.name}
+                        value={editForm.name || ''}
                         onChange={(e) => setEditForm({...editForm, name: e.target.value})}
                         required
                         disabled={loading}
@@ -521,7 +623,7 @@ const getDaysAgo = (property) => {
                       <input
                         type="email"
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 outline-none"
-                        value={editForm.email}
+                        value={editForm.email || ''}
                         onChange={(e) => setEditForm({...editForm, email: e.target.value})}
                         required
                         disabled={loading}
@@ -532,7 +634,7 @@ const getDaysAgo = (property) => {
                       <input
                         type="text"
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 outline-none"
-                        value={editForm.token}
+                        value={editForm.token || ''}
                         onChange={(e) => setEditForm({...editForm, token: e.target.value})}
                         required
                         disabled={loading}
@@ -563,26 +665,26 @@ const getDaysAgo = (property) => {
                       <div className="grid md:grid-cols-2 gap-6">
                         <div>
                           <p className="text-sm text-gray-600 mb-1">Name</p>
-                          <p className="text-lg font-medium text-gray-900">{user.name}</p>
+                          <p className="text-lg font-medium text-gray-900">{user?.name}</p>
                         </div>
                         <div>
                           <p className="text-sm text-gray-600 mb-1">Email</p>
-                          <p className="text-lg font-medium text-gray-900">{user.email}</p>
+                          <p className="text-lg font-medium text-gray-900">{user?.email}</p>
                         </div>
                         <div>
                           <p className="text-sm text-gray-600 mb-1">Company Code</p>
-                          <p className="text-lg font-medium text-gray-900">{user.companycode}</p>
+                          <p className="text-lg font-medium text-gray-900">{user?.companycode}</p>
                         </div>
                         <div>
                           <p className="text-sm text-gray-600 mb-1">CRM Token</p>
                           <p className="text-lg font-medium text-gray-900 font-mono">
-                            {user.token?.substring(0, 20)}...
+                            {user?.token?.substring(0, 20)}...
                           </p>
                         </div>
                       </div>
                     </div>
 
-                    {user.states_counties && user.states_counties.length > 0 && (
+                    {user?.states_counties && user.states_counties.length > 0 && (
                       <div className="bg-gray-50 p-6 rounded-xl">
                         <h4 className="text-lg font-semibold text-gray-900 mb-4">Assigned States & Counties</h4>
                         <div className="space-y-4">
@@ -615,18 +717,25 @@ const getDaysAgo = (property) => {
                       <div className="grid md:grid-cols-2 gap-6">
                         <div>
                           <p className="text-sm text-gray-600 mb-1">User ID</p>
-                          <p className="text-lg font-medium text-gray-900">{user.id}</p>
+                          <p className="text-lg font-medium text-gray-900">{user?.id}</p>
                         </div>
                         <div>
-                          <p className="text-sm text-gray-600 mb-1">Last Login</p>
+                          <p className="text-sm text-gray-600 mb-1">Auto-Refresh Status</p>
+                          <div className="flex items-center">
+                            <span className="w-2 h-2 bg-green-500 rounded-full mr-2 auto-refresh-indicator"></span>
+                            <p className="text-lg font-medium text-gray-900">Active (15 min)</p>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600 mb-1">Last Update</p>
                           <p className="text-lg font-medium text-gray-900">
-                            {new Date().toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
+                            {lastRefresh ? lastRefresh.toLocaleString() : 'Loading...'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600 mb-1">Session Time</p>
+                          <p className="text-lg font-medium text-gray-900">
+                            {new Date().toLocaleTimeString()}
                           </p>
                         </div>
                       </div>

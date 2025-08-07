@@ -131,6 +131,7 @@ class SeenProperties(Base):
     contact_last_name = Column(String)
     contact_middle_name = Column(String)
     name_variation = Column(String)
+    contract_date = Column(DateTime, nullable=True)  # Add this field
     created_at = Column(DateTime, server_default=func.now())
 
 # Create tables (run once at startup)
@@ -236,12 +237,10 @@ class LoginResponse(BaseModel):
     user: OwnerOut
 
 # Seen Properties schemas
-# Replace your SeenPropertyOut schema in backend/main.py with this updated version
-
 class SeenPropertyOut(BaseModel):
     id: int
     crm_owner_id: int
-    property_id: str  # This will auto-convert integers to strings
+    property_id: str
     owner_name: Optional[str] = None
     street_address: Optional[str] = None
     county: Optional[str] = None
@@ -252,9 +251,9 @@ class SeenPropertyOut(BaseModel):
     contact_last_name: Optional[str] = None
     contact_middle_name: Optional[str] = None
     name_variation: Optional[str] = None
+    contract_date: Optional[datetime] = None  # Add this field
     created_at: datetime
 
-    # Add this validator to handle integer property_ids
     @validator('property_id', pre=True)
     def convert_property_id_to_string(cls, v):
         if v is not None:

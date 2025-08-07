@@ -119,6 +119,7 @@ const AgentDashboard = () => {
   };
 
   const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -129,31 +130,52 @@ const AgentDashboard = () => {
   };
 
 const getDaysAgo = (property) => {
-  // Use contract_date if available, otherwise fall back to created_at
-  const dateToUse = property.contract_date || property.created_at;
-  const propertyDate = new Date(dateToUse);
-  const now = new Date();
-  const diffTime = Math.abs(now - propertyDate);
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-};
+    // Use contract_date if available, otherwise fall back to created_at
+    const dateToUse = property.contract_date || property.created_at;
+    if (!dateToUse) return 0;
+    
+    const propertyDate = new Date(dateToUse);
+    const now = new Date();
+    const diffTime = now - propertyDate; // Don't use Math.abs - we want actual difference
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)); // Use Math.floor, not Math.ceil
+    
+    return Math.max(0, diffDays); // Ensure we don't return negative days
+  };
 
-const getPropertyStatusColor = (property) => {
-  const daysAgo = getDaysAgo(property);
-  if (daysAgo <= 7) return 'bg-green-100 text-green-800';
-  if (daysAgo <= 30) return 'bg-yellow-100 text-yellow-800';
-  return 'bg-gray-100 text-gray-800';
-};
+  // Get the label for days ago calculation
+  const getDaysAgoLabel = (property) => {
+    const daysAgo = getDaysAgo(property);
+    const dateType = property.contract_date ? 'contract' : 'added';
+    
+    if (daysAgo === 0) {
+      return dateType === 'contract' ? 'Contract today' : 'Added today';
+    } else if (daysAgo === 1) {
+      return dateType === 'contract' ? 'Contract 1 day ago' : 'Added 1 day ago';
+    } else {
+      return dateType === 'contract' ? `Contract ${daysAgo} days ago` : `Added ${daysAgo} days ago`;
+    }
+  };
 
-  if (loading && !user) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="spinner-large animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto"></div>
-          <p className="text-gray-600 mt-4">Loading dashboard...</p>
-        </div>
-      </div>
-    );
-  }
+  const getPropertyStatusColor = (property) => {
+    const daysAgo = getDaysAgo(property);
+    if (daysAgo === 0) return 'bg-blue-100 text-blue-800'; // Today
+    if (daysAgo <= 7) return 'bg-green-100 text-green-800'; // This week
+    if (daysAgo <= 30) return 'bg-yellow-100 text-yellow-800'; // This month
+    return 'bg-gray-100 text-gray-800'; // Older
+  };
+
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    // Mock profile update
+    console.log('Updating profile:', editForm);
+    setEditMode(false);
+  };
+
+  const refreshData = async () => {
+    setLoading(true);
+    // Mock refresh
+    setTimeout(() => setLoading(false), 1000);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">

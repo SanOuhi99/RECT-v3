@@ -448,6 +448,7 @@ def get_seen_properties_stats(current_user: CrmOwner = Depends(get_current_user)
         "state_breakdown": [{"state": row.state, "count": row.count} for row in state_stats]
     }
 
+# Update the /seen_properties/paginated endpoint to filter by contract_date when specified
 @app.get("/seen_properties/paginated")
 def get_seen_properties_paginated(
     page: int = 1,
@@ -507,6 +508,7 @@ def get_seen_properties_paginated(
         }
     }
 
+# Update the /seen_properties/analytics endpoint to provide better insights
 @app.get("/seen_properties/analytics")
 def get_detailed_analytics(
     current_user: CrmOwner = Depends(get_current_user),
@@ -660,6 +662,7 @@ def get_detailed_analytics(
         ]
     }
 
+# Update the /user/activity-summary endpoint to show both system and contract insights
 @app.get("/user/activity-summary")
 def get_user_activity_summary(
     current_user: CrmOwner = Depends(get_current_user),
@@ -724,6 +727,7 @@ def get_user_activity_summary(
             "timezone": "UTC"
         }
     }
+
 # Add error handling middleware
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):

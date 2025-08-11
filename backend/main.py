@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, validator
-from sqlalchemy import create_engine, Column, Integer, String, JSON, text, insert, UniqueConstraint, DateTime, func
+from sqlalchemy import create_engine, Column, Integer, String, JSON, text, insert, UniqueConstraint, DateTime, func, Boolean
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from dotenv import load_dotenv
 from passlib.context import CryptContext

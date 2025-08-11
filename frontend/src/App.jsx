@@ -1,19 +1,23 @@
-// frontend/src/App.jsx - Updated with Admin Routes
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
+import { CompanyAuthProvider, useCompanyAuth } from './contexts/CompanyAuthContext';
 
-// Import your components
+// Import components
 import RECTLandingPage from './RECTLandingPage';
 import AgentLogin from './pages/AgentLogin';
 import AgentSignup from './pages/AgentSignup';
 import AgentDashboard from './pages/AgentDashboard';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
+import CompanyRegister from './pages/CompanyRegister';
+import CompanyLogin from './pages/CompanyLogin';
+import CompanyDashboard from './pages/CompanyDashboard';
 import ProtectedAdminRoute from './components/ProtectedAdminRoute';
+import ProtectedCompanyRoute from './components/ProtectedCompanyRoute';
 
-// Protected Route Component for regular users
+// Protected Route Component for regular users (agents)
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
 
@@ -67,10 +71,45 @@ const AdminPublicRoute = ({ children }) => {
   return !isAuthenticated ? children : <Navigate to="/admin/dashboard" replace />;
 };
 
+// Company Public Route Component
+const CompanyPublicRoute = ({ children }) => {
+  const { isAuthenticated, loading } = useCompanyAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="spinner-large animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="text-gray-600 mt-4">Loading company portal...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return !isAuthenticated ? children : <Navigate to="/company-dashboard" replace />;
+};
+
 function AppContent() {
   return (
     <Router>
       <div className="App">
+        <style jsx>{`
+          .spinner-large {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #e74c3c;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+          }
+          
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
+        
         <Routes>
           {/* Public Routes */}
           <Route path="/" element={<RECTLandingPage />} />
@@ -93,6 +132,24 @@ function AppContent() {
             } 
           />
 
+          {/* Company Routes */}
+          <Route 
+            path="/company-register" 
+            element={
+              <CompanyPublicRoute>
+                <CompanyRegister />
+              </CompanyPublicRoute>
+            } 
+          />
+          <Route 
+            path="/company-login" 
+            element={
+              <CompanyPublicRoute>
+                <CompanyLogin />
+              </CompanyPublicRoute>
+            } 
+          />
+
           {/* Admin Routes */}
           <Route 
             path="/admin/login" 
@@ -110,6 +167,16 @@ function AppContent() {
               <ProtectedRoute>
                 <AgentDashboard />
               </ProtectedRoute>
+            } 
+          />
+
+          {/* Protected Company Routes */}
+          <Route 
+            path="/company-dashboard" 
+            element={
+              <ProtectedCompanyRoute>
+                <CompanyDashboard />
+              </ProtectedCompanyRoute>
             } 
           />
 
@@ -139,7 +206,9 @@ function App() {
   return (
     <AuthProvider>
       <AdminAuthProvider>
-        <AppContent />
+        <CompanyAuthProvider>
+          <AppContent />
+        </CompanyAuthProvider>
       </AdminAuthProvider>
     </AuthProvider>
   );

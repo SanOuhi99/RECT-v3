@@ -466,8 +466,22 @@ const AdminDashboard = () => {
                             {user.states_counties?.length || 0} assigned
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {/* This would need to be calculated from seen_properties */}
-                            N/A
+                            <div className="space-y-1">
+                              <div className="flex items-center">
+                                <span className="font-medium text-lg">{user.property_count || 0}</span>
+                                <span className="text-xs text-gray-500 ml-1">total</span>
+                              </div>
+                              {user.recent_properties > 0 && (
+                                <div className="text-xs text-green-600">
+                                  +{user.recent_properties} this month
+                                </div>
+                              )}
+                              {user.properties_with_contracts > 0 && (
+                                <div className="text-xs text-blue-600">
+                                  {user.properties_with_contracts} with contracts
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <div className="flex space-x-2">

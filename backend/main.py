@@ -427,7 +427,7 @@ def update_current_user(
         for state_county in user_update.states_counties:
             # Verify state exists
             state_exists = db.query(StatesCounties).filter(
-                StatesCounties.statefips == state_county.state_FIPS
+                StatesCounties.statefips == str(state_county.state_FIPS)
             ).first()
             if not state_exists:
                 raise HTTPException(status_code=400, detail=f"Invalid state FIPS: {state_county.state_FIPS}")
@@ -435,8 +435,8 @@ def update_current_user(
             # Verify counties exist
             for county in state_county.counties:
                 county_exists = db.query(StatesCounties).filter(
-                    StatesCounties.statefips == state_county.state_FIPS,
-                    StatesCounties.countyfips == county.county_FIPS
+                    StatesCounties.statefips == str(state_county.state_FIPS),
+                    StatesCounties.countyfips == str(county.county_FIPS)
                 ).first()
                 if not county_exists:
                     raise HTTPException(status_code=400, detail=f"Invalid county FIPS: {county.county_FIPS} for state: {state_county.state_FIPS}")

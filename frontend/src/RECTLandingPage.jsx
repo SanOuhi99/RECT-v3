@@ -116,15 +116,22 @@ const RECTLandingPage = () => {
 
             {/* Desktop links */}
             <div className="hidden md:flex space-x-8">
-              {['features', 'about', 'contact', 'admin'].map((id) => (
-                <Link 
-                  key={id} 
-                  to={`/${id}`}
-                  className="nav-link text-gray-700 hover:text-red-600"
-                >
-                  {id.charAt(0).toUpperCase() + id.slice(1)}
-                </Link>
-              ))}
+              <a href="#features" className="nav-link text-gray-700 hover:text-red-600">
+                Features
+              </a>
+              <a href="#about" className="nav-link text-gray-700 hover:text-red-600">
+                About
+              </a>
+              <a href="#contact" className="nav-link text-gray-700 hover:text-red-600">
+                Contact
+              </a>
+              <Link 
+                to="/admin/login"
+                className="nav-link text-gray-700 hover:text-red-600 text-sm"
+              >
+                <i className="fas fa-shield-alt mr-1"></i>
+                Admin
+              </Link>
             </div>
 
             {/* Mobile toggle */}
@@ -140,16 +147,22 @@ const RECTLandingPage = () => {
           {/* Mobile menu */}
           {mobileOpen && (
             <div className="md:hidden pb-3">
-              {['features', 'about', 'contact', 'admin'].map((id) => (
-                <Link
-                  key={id}
-                  to={`/${id}`}
-                  className="block px-4 py-2 text-gray-700 hover:bg-gray-100"
-                  onClick={() => setMobileOpen(false)}
-                >
-                  {id.charAt(0).toUpperCase() + id.slice(1)}
-                </Link>
-              ))}
+              <a href="#features" className="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+                Features
+              </a>
+              <a href="#about" className="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+                About
+              </a>
+              <a href="#contact" className="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+                Contact
+              </a>
+              <Link
+                to="/admin/login"
+                className="block px-4 py-2 text-gray-700 hover:bg-gray-100"
+                onClick={() => setMobileOpen(false)}
+              >
+                Admin
+              </Link>
             </div>
           )}
         </div>

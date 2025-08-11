@@ -194,7 +194,7 @@ const CompanyDashboard = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
-
+  
     try {
       // Validation
       if (!newAgent.name.trim() || !newAgent.email.trim() || !newAgent.token.trim() || !newAgent.password.trim()) {
@@ -202,29 +202,40 @@ const CompanyDashboard = () => {
         setLoading(false);
         return;
       }
-
+  
       if (newAgent.password.length < 6) {
         setError('Password must be at least 6 characters long');
         setLoading(false);
         return;
       }
-
+  
       if (selectedSelections.length === 0) {
         setError('Please select at least one state and county');
         setLoading(false);
         return;
       }
-
+  
+      // Transform selectedSelections to match backend structure
+      const transformedSelections = selectedSelections.map(selection => ({
+        state_FIPS: selection.state_FIPS,
+        state_name: selection.state_name,
+        counties: selection.counties.map(county => ({
+          county_FIPS: county.county_FIPS,
+          county_name: county.county_name
+        }))
+      }));
+  
       const agentData = {
         name: newAgent.name.trim(),
         email: newAgent.email.trim(),
         token: newAgent.token.trim(),
         password: newAgent.password,
-        states_counties: selectedSelections
+        states_counties: transformedSelections  // Use transformed data here
       };
-
+  
       const result = await addAgent(agentData);
       
+      // Reset form on success
       setShowAddAgent(false);
       setNewAgent({
         name: '',
@@ -238,15 +249,34 @@ const CompanyDashboard = () => {
       setCounties([]);
       await loadDashboardData();
       alert('Agent added successfully!');
-
+  
     } catch (error) {
       console.error('Error adding agent:', error);
       let errorMessage = 'Failed to add agent';
       
-      if (error.message && error.message !== '[object Object]') {
+      // Enhanced error parsing
+      if (error.response) {
+        // Handle HTTP error responses
+        try {
+          const errorData = await error.response.json();
+          if (errorData.detail) {
+            if (Array.isArray(errorData.detail)) {
+              errorMessage = errorData.detail.map(e => 
+                `${e.loc?.join('.') || 'field'}: ${e.msg}`
+              ).join('\n');
+            } else if (typeof errorData.detail === 'string') {
+              errorMessage = errorData.detail;
+            } else if (errorData.detail.message) {
+              errorMessage = `${errorData.detail.message}\n${
+                JSON.stringify(errorData.detail.errors, null, 2)
+              }`;
+            }
+          }
+        } catch (parseError) {
+          console.error('Error parsing error response:', parseError);
+        }
+      } else if (error.message) {
         errorMessage = error.message;
-      } else if (typeof error === 'string') {
-        errorMessage = error;
       }
       
       setError(errorMessage);

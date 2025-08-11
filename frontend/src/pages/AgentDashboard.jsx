@@ -340,6 +340,36 @@ const AgentDashboard = () => {
       minute: '2-digit'
     });
   };
+  
+  // Format time as relative (e.g. "2 minutes ago")
+  const formatRelativeTime = (date) => {
+    const now = new Date();
+    const diff = now - new Date(date);
+    const minutes = Math.floor(diff / (1000 * 60));
+    
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+    
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+    
+    const days = Math.floor(hours / 24);
+    return `${days} day${days !== 1 ? 's' : ''} ago`;
+  };
+  
+  // Format session duration
+  const formatSessionDuration = (startTime) => {
+    if (!startTime) return 'New session';
+    const now = new Date();
+    const diff = now - new Date(startTime);
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    
+    if (hours < 1) return 'Less than 1 hour';
+    if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''}`;
+    
+    const days = Math.floor(hours / 24);
+    return `${days} day${days !== 1 ? 's' : ''}`;
+  };
 
   const getDaysAgo = (property) => {
     const dateToUse = property.contract_date || property.created_at;
@@ -1044,8 +1074,10 @@ const AgentDashboard = () => {
                       <h4 className="text-lg font-semibold text-gray-900 mb-4">Session Information</h4>
                       <div className="grid md:grid-cols-2 gap-6">
                         <div>
-                          <p className="text-sm text-gray-600 mb-1">User ID</p>
-                          <p className="text-lg font-medium text-gray-900">{user?.id}</p>
+                          <p className="text-sm text-gray-600 mb-1">Account Identifier</p>
+                          <p className="text-lg font-medium text-gray-900">
+                            {user?.email || 'N/A'}
+                          </p>
                         </div>
                         <div>
                           <p className="text-sm text-gray-600 mb-1">Auto-Refresh Status</p>
@@ -1055,15 +1087,15 @@ const AgentDashboard = () => {
                           </div>
                         </div>
                         <div>
-                          <p className="text-sm text-gray-600 mb-1">Last Update</p>
+                          <p className="text-sm text-gray-600 mb-1">Last Updated</p>
                           <p className="text-lg font-medium text-gray-900">
-                            {lastRefresh ? lastRefresh.toLocaleString() : 'Loading...'}
+                            {lastRefresh ? formatRelativeTime(lastRefresh) : 'Loading...'}
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm text-gray-600 mb-1">Current Time</p>
+                          <p className="text-sm text-gray-600 mb-1">Current Session</p>
                           <p className="text-lg font-medium text-gray-900">
-                            {new Date().toLocaleTimeString()}
+                            {formatSessionDuration(user?.created_at)}
                           </p>
                         </div>
                       </div>

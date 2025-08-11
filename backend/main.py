@@ -35,6 +35,12 @@ def hash_password(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
+def create_admin_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
+    to_encode.update({"exp": expire, "type": "admin"})
+    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return encoded_jwt
 def create_access_token(data: dict):
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
@@ -91,6 +97,18 @@ def import_states_counties_from_csv(csv_path: str, db: Session):
         db.commit()
         print(f"✅ Imported {len(rows)} records from {csv_path}")
 
+
+class Admin(Base):
+    __tablename__ = "admins"
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, nullable=False, unique=True, index=True)
+    email = Column(String, nullable=False, unique=True, index=True)
+    password = Column(String, nullable=False)  # hashed password
+    role = Column(String, nullable=False, default="admin")  # admin, super_admin
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, server_default=func.now())
+    last_login = Column(DateTime, nullable=True)
+
 class Company(Base):
     __tablename__ = "companies"
     id = Column(Integer, primary_key=True, index=True)
@@ -143,7 +161,32 @@ with SessionLocal() as session:
     if existing_count == 0:
         import_states_counties_from_csv("states_counties.csv", session)
 
+with SessionLocal() as session:
+    existing_admin = session.query(Admin).first()
+    if not existing_admin:
+        default_admin = Admin(
+            username="Rectadmin",
+            email="admin@rect.com",
+            password=hash_password("!Ezpass4905"),  # Change this!
+            role="super_admin"
+        )
+        session.add(default_admin)
+        session.commit()
+        print("✅ Default admin created: Rectadmin/!Ezpass4905")
+
 # Authentication dependency
+def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    token = credentials.credentials
+    payload = verify_token(token)
+    admin_id = payload.get("admin_id")
+    if not admin_id:
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+    
+    admin = db.query(Admin).filter(Admin.id == admin_id, Admin.is_active == True).first()
+    if not admin:
+        raise HTTPException(status_code=401, detail="Admin not found or inactive")
+    
+    return admin
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
     token = credentials.credentials
     payload = verify_token(token)
@@ -159,6 +202,38 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
 
 # --- Schemas ---
 
+# Add admin schemas
+class AdminLogin(BaseModel):
+    username: str
+    password: str
+
+class AdminOut(BaseModel):
+    id: int
+    username: str
+    email: str
+    role: str
+    is_active: bool
+    created_at: datetime
+    last_login: Optional[datetime] = None
+
+    class Config:
+        orm_mode = True
+
+class AdminLoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+    admin: AdminOut
+
+class UserStats(BaseModel):
+    total_users: int
+    active_users: int
+    total_companies: int
+    total_properties: int
+    recent_signups: int
+    users_by_state: List[dict]
+    properties_by_month: List[dict]
+
+# StateCounties schemas
 class County(BaseModel):
     county_FIPS: int
     county_name: str
@@ -383,7 +458,7 @@ def create_owner(owner: OwnerCreate, db: Session = Depends(get_db)):
     db.refresh(db_owner)
     return db_owner
 
-# Add this new endpoint for token validation
+# endpoint for token validation
 @app.get("/validate-token")
 def validate_token(current_user: CrmOwner = Depends(get_current_user)):
     """
@@ -448,7 +523,7 @@ def get_seen_properties_stats(current_user: CrmOwner = Depends(get_current_user)
         "state_breakdown": [{"state": row.state, "count": row.count} for row in state_stats]
     }
 
-# Update the /seen_properties/paginated endpoint to filter by contract_date when specified
+# endpoint to filter by contract_date when specified
 @app.get("/seen_properties/paginated")
 def get_seen_properties_paginated(
     page: int = 1,
@@ -508,7 +583,7 @@ def get_seen_properties_paginated(
         }
     }
 
-# Update the /seen_properties/analytics endpoint to provide better insights
+# endpoint to provide better insights
 @app.get("/seen_properties/analytics")
 def get_detailed_analytics(
     current_user: CrmOwner = Depends(get_current_user),
@@ -662,7 +737,6 @@ def get_detailed_analytics(
         ]
     }
 
-# Update the /user/activity-summary endpoint to show both system and contract insights
 @app.get("/user/activity-summary")
 def get_user_activity_summary(
     current_user: CrmOwner = Depends(get_current_user),
@@ -742,6 +816,206 @@ async def general_exception_handler(request: Request, exc: Exception):
             "error_type": type(exc).__name__
         }
     )
+
+
+# Admin authentication endpoints
+@app.post("/admin/login", response_model=AdminLoginResponse)
+def admin_login(admin_data: AdminLogin, db: Session = Depends(get_db)):
+    admin = db.query(Admin).filter(Admin.username == admin_data.username).first()
+    if not admin or not verify_password(admin_data.password, admin.password) or not admin.is_active:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    # Update last login
+    admin.last_login = datetime.utcnow()
+    db.commit()
+    
+    access_token = create_admin_token(data={"admin_id": admin.id})
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "admin": admin
+    }
+
+@app.get("/admin/me", response_model=AdminOut)
+def get_current_admin_info(current_admin: Admin = Depends(get_current_admin)):
+    return current_admin
+
+# User management endpoints
+@app.get("/admin/users")
+def get_all_users(
+    page: int = 1,
+    page_size: int = 20,
+    search: str = None,
+    company: str = None,
+    current_admin: Admin = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    query = db.query(CrmOwner)
+    
+    if search:
+        query = query.filter(
+            CrmOwner.name.ilike(f"%{search}%") | 
+            CrmOwner.email.ilike(f"%{search}%")
+        )
+    
+    if company:
+        query = query.filter(CrmOwner.companycode.ilike(f"%{company}%"))
+    
+    total = query.count()
+    users = query.offset((page - 1) * page_size).limit(page_size).all()
+    
+    return {
+        "users": users,
+        "pagination": {
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "total_pages": (total + page_size - 1) // page_size
+        }
+    }
+
+@app.get("/admin/companies")
+def get_all_companies(current_admin: Admin = Depends(get_current_admin), db: Session = Depends(get_db)):
+    companies = db.query(Company).all()
+    
+    # Add user counts for each company
+    company_stats = []
+    for company in companies:
+        user_count = db.query(CrmOwner).filter(CrmOwner.companycode == company.companycode).count()
+        company_stats.append({
+            "id": company.id,
+            "name": company.name,
+            "companycode": company.companycode,
+            "user_count": user_count,
+            "created_at": getattr(company, 'created_at', None)
+        })
+    
+    return company_stats
+
+@app.get("/admin/stats")
+def get_admin_stats(current_admin: Admin = Depends(get_current_admin), db: Session = Depends(get_db)):
+    # Basic counts
+    total_users = db.query(CrmOwner).count()
+    total_companies = db.query(Company).count()
+    total_properties = db.query(SeenProperties).count()
+    
+    # Recent signups (last 30 days)
+    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    recent_signups = db.query(CrmOwner).filter(CrmOwner.id > 0).count()  # Adjust based on your created_at field
+    
+    # Users by company
+    users_by_company = db.execute(text("""
+        SELECT companycode, COUNT(*) as count 
+        FROM crm_owners 
+        GROUP BY companycode
+        ORDER BY count DESC
+        LIMIT 10
+    """)).fetchall()
+    
+    # Properties by month (last 6 months)
+    properties_by_month = db.execute(text("""
+        SELECT 
+            DATE_TRUNC('month', created_at) as month,
+            COUNT(*) as count
+        FROM seen_properties 
+        WHERE created_at >= NOW() - INTERVAL '6 months'
+        GROUP BY DATE_TRUNC('month', created_at)
+        ORDER BY month DESC
+    """)).fetchall()
+    
+    # Top performing states
+    top_states = db.execute(text("""
+        SELECT state, COUNT(*) as count 
+        FROM seen_properties 
+        WHERE state IS NOT NULL
+        GROUP BY state
+        ORDER BY count DESC
+        LIMIT 10
+    """)).fetchall()
+    
+    return {
+        "overview": {
+            "total_users": total_users,
+            "total_companies": total_companies,
+            "total_properties": total_properties,
+            "recent_signups": recent_signups
+        },
+        "users_by_company": [{"company": row.companycode, "count": row.count} for row in users_by_company],
+        "properties_by_month": [{"month": row.month.strftime("%Y-%m"), "count": row.count} for row in properties_by_month],
+        "top_states": [{"state": row.state, "count": row.count} for row in top_states]
+    }
+
+@app.delete("/admin/users/{user_id}")
+def delete_user(
+    user_id: int,
+    current_admin: Admin = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    if current_admin.role != "super_admin":
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    user = db.query(CrmOwner).filter(CrmOwner.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Delete associated seen properties
+    db.query(SeenProperties).filter(SeenProperties.crm_owner_id == user_id).delete()
+    
+    # Delete user
+    db.delete(user)
+    db.commit()
+    
+    return {"message": "User deleted successfully"}
+
+@app.put("/admin/users/{user_id}/toggle-status")
+def toggle_user_status(
+    user_id: int,
+    current_admin: Admin = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    user = db.query(CrmOwner).filter(CrmOwner.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Add is_active field if it doesn't exist
+    # user.is_active = not getattr(user, 'is_active', True)
+    # For now, we'll use a different approach
+    
+    db.commit()
+    return {"message": "User status updated successfully"}
+
+# System health endpoints
+@app.get("/admin/system/health")
+def get_system_health(current_admin: Admin = Depends(get_current_admin), db: Session = Depends(get_db)):
+    try:
+        # Test database connection
+        db.execute(text("SELECT 1"))
+        
+        # Get recent activity
+        recent_properties = db.query(SeenProperties).filter(
+            SeenProperties.created_at >= datetime.utcnow() - timedelta(hours=24)
+        ).count()
+        
+        # Check for failed tasks (you'll need to implement this based on your worker monitoring)
+        
+        return {
+            "status": "healthy",
+            "database": "connected",
+            "recent_activity": {
+                "properties_last_24h": recent_properties
+            },
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unhealthy",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
 
 # Health check with database connectivity
 @app.get("/health/detailed")

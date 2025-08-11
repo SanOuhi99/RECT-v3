@@ -17,7 +17,6 @@ const AgentDashboard = () => {
   // Enhanced profile editing state
   const [statesData, setStatesData] = useState([]);
   const [counties, setCounties] = useState([]);
-  const [companies, setCompanies] = useState([]);
   const [selectedSelections, setSelectedSelections] = useState([]);
   const [tempFormState, setTempFormState] = useState({
     state: '',
@@ -49,16 +48,6 @@ const AgentDashboard = () => {
       setStatesData(data);
     } catch (error) {
       console.error('Error loading states:', error);
-    }
-  }, [API_URL]);
-
-  const loadCompanies = useCallback(async () => {
-    try {
-      const response = await fetch(`${API_URL}/companies/list`);
-      const data = await response.json();
-      setCompanies(data);
-    } catch (error) {
-      console.error('Error loading companies:', error);
     }
   }, [API_URL]);
 
@@ -204,7 +193,6 @@ const AgentDashboard = () => {
   useEffect(() => {
     if (editMode) {
       loadStatesData();
-      loadCompanies();
       
       if (user?.states_counties) {
         setSelectedSelections(user.states_counties);
@@ -220,7 +208,7 @@ const AgentDashboard = () => {
         confirmPassword: ''
       });
     }
-  }, [editMode, user, loadStatesData, loadCompanies]);
+  }, [editMode, user, loadStatesData]);
 
   // Initial load
   useEffect(() => {
@@ -820,20 +808,18 @@ const AgentDashboard = () => {
                         </div>
                         <div>
                           <label className="block text-gray-700 mb-2 font-medium">Company Code *</label>
-                          <select
+                          <input
+                            type="text"
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 outline-none"
                             value={editForm.companycode || ''}
-                            onChange={(e) => setEditForm({...editForm, companycode: e.target.value})}
+                            onChange={(e) => setEditForm({...editForm, companycode: e.target.value.toUpperCase()})}
+                            placeholder="Enter your company code"
                             required
                             disabled={loading}
-                          >
-                            <option value="">Select Company</option>
-                            {companies.map((company) => (
-                              <option key={company.id} value={company.companycode}>
-                                {company.name} ({company.companycode})
-                              </option>
-                            ))}
-                          </select>
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Contact your company administrator for your company code
+                          </p>
                         </div>
                       </div>
                     </div>

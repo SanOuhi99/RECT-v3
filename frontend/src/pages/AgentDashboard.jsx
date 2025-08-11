@@ -14,6 +14,17 @@ const AgentDashboard = () => {
   const [error, setError] = useState('');
   const [lastRefresh, setLastRefresh] = useState(null);
 
+  // Enhanced profile editing state
+  const [statesData, setStatesData] = useState([]);
+  const [counties, setCounties] = useState([]);
+  const [companies, setCompanies] = useState([]);
+  const [selectedSelections, setSelectedSelections] = useState([]);
+  const [tempFormState, setTempFormState] = useState({
+    state: '',
+    county: ''
+  });
+  const [showPasswordFields, setShowPasswordFields] = useState(false);
+
   // Refs to prevent stale closure issues
   const refreshIntervalRef = useRef(null);
   const isInitializedRef = useRef(false);
@@ -24,12 +35,105 @@ const AgentDashboard = () => {
     updateProfile, 
     fetchSeenProperties, 
     fetchDashboardStats,
-    fetchUserData 
+    fetchUserData,
+    API_URL
   } = useAuth();
   
   const navigate = useNavigate();
 
-  // Memoized data loading functions to prevent unnecessary re-renders
+  // Enhanced data loading functions
+  const loadStatesData = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_URL}/states_counties`);
+      const data = await response.json();
+      setStatesData(data);
+    } catch (error) {
+      console.error('Error loading states:', error);
+    }
+  }, [API_URL]);
+
+  const loadCompanies = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_URL}/companies/list`);
+      const data = await response.json();
+      setCompanies(data);
+    } catch (error) {
+      console.error('Error loading companies:', error);
+    }
+  }, [API_URL]);
+
+  const handleStateChange = (e) => {
+    const stateFIPS = parseInt(e.target.value, 10);
+    const selectedState = statesData.find(s => s.state_FIPS === stateFIPS);
+    setCounties(selectedState?.counties || []);
+    setTempFormState(prev => ({
+      ...prev,
+      state: stateFIPS,
+      county: ''
+    }));
+  };
+
+  const addStateCountySelection = () => {
+    if (!tempFormState.state || !tempFormState.county) {
+      alert("Please select both state and county");
+      return;
+    }
+
+    const state = statesData.find(s => s.state_FIPS === tempFormState.state);
+    const county = counties.find(c => c.county_FIPS === tempFormState.county);
+
+    const newSelection = {
+      state_FIPS: tempFormState.state,
+      state_name: state.state_name,
+      counties: [{
+        county_FIPS: tempFormState.county,
+        county_name: county.county_name
+      }]
+    };
+
+    // Check if state already exists in selections
+    const existingStateIndex = selectedSelections.findIndex(
+      s => s.state_FIPS === tempFormState.state
+    );
+
+    if (existingStateIndex !== -1) {
+      // Add county to existing state
+      const updatedSelections = [...selectedSelections];
+      const existingCounty = updatedSelections[existingStateIndex].counties.find(
+        c => c.county_FIPS === tempFormState.county
+      );
+      
+      if (!existingCounty) {
+        updatedSelections[existingStateIndex].counties.push({
+          county_FIPS: tempFormState.county,
+          county_name: county.county_name
+        });
+        setSelectedSelections(updatedSelections);
+      } else {
+        alert("This county is already selected");
+      }
+    } else {
+      // Add new state with county
+      setSelectedSelections(prev => [...prev, newSelection]);
+    }
+
+    setTempFormState({ state: '', county: '' });
+    setCounties([]);
+  };
+
+  const removeStateCounty = (stateIndex, countyIndex) => {
+    const updatedSelections = [...selectedSelections];
+    updatedSelections[stateIndex].counties.splice(countyIndex, 1);
+    
+    // Remove state if no counties left
+    if (updatedSelections[stateIndex].counties.length === 0) {
+      updatedSelections.splice(stateIndex, 1);
+    }
+    
+    setSelectedSelections(updatedSelections);
+  };
+
+  // Memoized data loading functions
   const loadProperties = useCallback(async () => {
     try {
       const data = await fetchSeenProperties();
@@ -58,7 +162,6 @@ const AgentDashboard = () => {
   const loadDashboardData = useCallback(async (isManualRefresh = false) => {
     if (!user) return;
 
-    // Don't show loading spinner for auto-refresh
     if (isManualRefresh || initialLoading) {
       setLoading(true);
     }
@@ -66,21 +169,22 @@ const AgentDashboard = () => {
     setError('');
 
     try {
-      // Ensure we have the latest user data
       await fetchUserData();
 
-      // Load data in parallel
       await Promise.all([
         loadProperties(),
         loadStats()
       ]);
 
-      // Initialize edit form only once
       if (!isInitializedRef.current) {
         setEditForm({
           name: user.name,
           email: user.email,
           token: user.token,
+          companycode: user.companycode,
+          currentPassword: '',
+          newPassword: '',
+          confirmPassword: ''
         });
         isInitializedRef.current = true;
       }
@@ -96,29 +200,47 @@ const AgentDashboard = () => {
     }
   }, [user, fetchUserData, loadProperties, loadStats, initialLoading]);
 
-  // Initial load - only run once when user is available
+  // Initialize when edit mode is activated
+  useEffect(() => {
+    if (editMode) {
+      loadStatesData();
+      loadCompanies();
+      
+      if (user?.states_counties) {
+        setSelectedSelections(user.states_counties);
+      }
+      
+      setEditForm({
+        name: user.name,
+        email: user.email,
+        token: user.token,
+        companycode: user.companycode,
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      });
+    }
+  }, [editMode, user, loadStatesData, loadCompanies]);
+
+  // Initial load
   useEffect(() => {
     if (user && !isInitializedRef.current) {
       loadDashboardData();
     }
-  }, [user]); // Only depend on user, not loadDashboardData
+  }, [user]);
 
-  // Auto-refresh timer - 15 minutes
+  // Auto-refresh timer
   useEffect(() => {
-    // Clear any existing interval
     if (refreshIntervalRef.current) {
       clearInterval(refreshIntervalRef.current);
     }
 
-    // Only set up auto-refresh if user is logged in and initial load is complete
     if (user && !initialLoading) {
       refreshIntervalRef.current = setInterval(() => {
-        console.log('Auto-refreshing dashboard data...');
-        loadDashboardData(false); // false = not manual refresh (no loading spinner)
-      }, 15 * 60 * 1000); // 15 minutes
+        loadDashboardData(false);
+      }, 15 * 60 * 1000);
     }
 
-    // Cleanup on unmount or when dependencies change
     return () => {
       if (refreshIntervalRef.current) {
         clearInterval(refreshIntervalRef.current);
@@ -133,35 +255,91 @@ const AgentDashboard = () => {
     setError('');
 
     try {
-      const result = await updateProfile(editForm);
+      // Validation
+      if (!editForm.name || !editForm.email || !editForm.token || !editForm.companycode) {
+        setError('Please fill in all required fields');
+        setLoading(false);
+        return;
+      }
+
+      if (selectedSelections.length === 0) {
+        setError('Please select at least one state and county');
+        setLoading(false);
+        return;
+      }
+
+      // Password validation if changing password
+      if (showPasswordFields) {
+        if (!editForm.currentPassword || !editForm.newPassword || !editForm.confirmPassword) {
+          setError('Please fill in all password fields');
+          setLoading(false);
+          return;
+        }
+
+        if (editForm.newPassword !== editForm.confirmPassword) {
+          setError('New passwords do not match');
+          setLoading(false);
+          return;
+        }
+
+        if (editForm.newPassword.length < 6) {
+          setError('New password must be at least 6 characters');
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Prepare update data
+      const updateData = {
+        name: editForm.name,
+        email: editForm.email,
+        token: editForm.token,
+        companycode: editForm.companycode,
+        states_counties: selectedSelections
+      };
+
+      if (showPasswordFields) {
+        updateData.current_password = editForm.currentPassword;
+        updateData.new_password = editForm.newPassword;
+      }
+
+      const result = await updateProfile(updateData);
       
       if (result.success) {
         setEditMode(false);
+        setShowPasswordFields(false);
+        
+        setEditForm(prev => ({
+          ...prev,
+          currentPassword: '',
+          newPassword: '',
+          confirmPassword: ''
+        }));
+        
         alert('Profile updated successfully!');
+        await loadDashboardData(false);
       } else {
         setError(result.error || 'Failed to update profile');
       }
     } catch (error) {
       console.error('Error updating profile:', error);
-      setError('Failed to update profile');
+      setError('Failed to update profile. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleLogout = () => {
-    // Clear the refresh interval
     if (refreshIntervalRef.current) {
       clearInterval(refreshIntervalRef.current);
       refreshIntervalRef.current = null;
     }
     logout();
-    navigate('/login');
+    navigate('/agent-login');
   };
 
-  // Manual refresh function
   const handleManualRefresh = async () => {
-    await loadDashboardData(true); // true = manual refresh (show loading spinner)
+    await loadDashboardData(true);
   };
 
   const formatDate = (dateString) => {
@@ -176,7 +354,6 @@ const AgentDashboard = () => {
   };
 
   const getDaysAgo = (property) => {
-    // Use contract_date if available, otherwise fall back to created_at
     const dateToUse = property.contract_date || property.created_at;
     if (!dateToUse) return 0;
     
@@ -209,7 +386,6 @@ const AgentDashboard = () => {
     return 'bg-gray-100 text-gray-800';
   };
 
-  // Show initial loading screen only on first load
   if (initialLoading && !user) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -271,11 +447,6 @@ const AgentDashboard = () => {
           box-shadow: 0 10px 25px rgba(0,0,0,0.15);
         }
 
-        .refresh-indicator {
-          opacity: 0.7;
-          font-size: 0.75rem;
-        }
-
         .auto-refresh-indicator {
           background: linear-gradient(45deg, #10b981, #059669);
           animation: pulse 2s infinite;
@@ -290,7 +461,7 @@ const AgentDashboard = () => {
       <Navbar />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header with Error Display and Last Refresh Info */}
+        {/* Header */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
           <div className="flex justify-between items-center">
             <div>
@@ -303,7 +474,7 @@ const AgentDashboard = () => {
               {lastRefresh && (
                 <p className="text-sm text-gray-500 mt-1 flex items-center">
                   <span className="w-2 h-2 bg-green-500 rounded-full mr-2 auto-refresh-indicator"></span>
-                  Last updated: {lastRefresh.toLocaleTimeString()} • Auto-refresh every 15 minutes
+                  Last updated: {lastRefresh.toLocaleTimeString()}
                 </p>
               )}
               {error && (
@@ -373,21 +544,21 @@ const AgentDashboard = () => {
                   <div className="text-4xl text-blue-600 mb-4">🏠</div>
                   <h3 className="text-2xl font-bold text-gray-900 mb-2">Total Properties</h3>
                   <p className="text-3xl font-bold text-blue-600">{stats.total_properties || 0}</p>
-                  <p className="text-gray-600 mt-2">Properties viewed</p>
+                  <p className="text-gray-600 mt-2">Properties tracked</p>
                 </div>
 
                 <div className="stat-card bg-gradient-to-br from-green-50 to-green-100 rounded-2xl p-6 text-center border-t-4 border-green-600">
                   <div className="text-4xl text-green-600 mb-4">📅</div>
                   <h3 className="text-2xl font-bold text-gray-900 mb-2">Recent Activity</h3>
                   <p className="text-3xl font-bold text-green-600">{stats.recent_properties || 0}</p>
-                  <p className="text-gray-600 mt-2">Added last 7 days</p>
+                  <p className="text-gray-600 mt-2">Last 7 days</p>
                 </div>
 
                 <div className="stat-card bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl p-6 text-center border-t-4 border-purple-600">
                   <div className="text-4xl text-purple-600 mb-4">📋</div>
                   <h3 className="text-2xl font-bold text-gray-900 mb-2">Recent Contracts</h3>
                   <p className="text-3xl font-bold text-purple-600">{stats.recent_contracts || 0}</p>
-                  <p className="text-gray-600 mt-2">Contracts last 30 days</p>
+                  <p className="text-gray-600 mt-2">Last 30 days</p>
                 </div>
 
                 <div className="stat-card bg-gradient-to-br from-red-50 to-red-100 rounded-2xl p-6 text-center border-t-4 border-red-600">
@@ -438,7 +609,7 @@ const AgentDashboard = () => {
                             {property.county}, {property.state}
                           </p>
                           <div className="text-xs text-gray-500 mt-1">
-                            <div>Added: {formatDate(property.created_at)}</div>
+                            <div>{formatDate(property.created_at)}</div>
                             {property.contract_date && (
                               <div>Contract: {formatDate(property.contract_date)}</div>
                             )}
@@ -462,7 +633,7 @@ const AgentDashboard = () => {
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-2xl font-bold text-gray-900">
-                  Your Seen Properties ({properties.length})
+                  Your Properties ({properties.length})
                 </h3>
                 <button
                   onClick={handleManualRefresh}
@@ -484,7 +655,7 @@ const AgentDashboard = () => {
                 <div className="text-center py-12">
                   <div className="text-6xl text-gray-300 mb-4">🏠</div>
                   <h4 className="text-xl font-medium text-gray-600 mb-2">No properties yet</h4>
-                  <p className="text-gray-500">Your property matches will appear here when the system finds them.</p>
+                  <p className="text-gray-500">Your property matches will appear here when found.</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -517,11 +688,11 @@ const AgentDashboard = () => {
                         </div>
                       </div>
 
-                      {/* Date Information Section */}
+                      {/* Date Information */}
                       <div className="mb-4 p-4 bg-gray-50 rounded-lg">
                         <div className="grid md:grid-cols-2 gap-4">
                           <div>
-                            <p className="text-sm text-gray-600 mb-1">Added to System</p>
+                            <p className="text-sm text-gray-600 mb-1">System Date</p>
                             <p className="font-medium">{formatDate(property.created_at)}</p>
                             <p className="text-xs text-green-600">
                               {getDaysAgo({created_at: property.created_at})} days ago
@@ -567,9 +738,6 @@ const AgentDashboard = () => {
                         <span className={`px-3 py-1 rounded-full text-sm font-medium ${getPropertyStatusColor(property)}`}>
                           {getDaysAgoLabel(property)}
                         </span>
-                        <div className="text-xs text-gray-500">
-                          Priority: {property.contract_date ? 'Contract Date' : 'System Date'}
-                        </div>
                       </div>
                     </div>
                   ))}
@@ -578,21 +746,27 @@ const AgentDashboard = () => {
             </div>
           )}
 
-          {/* Profile Tab */}
+          {/* Enhanced Profile Tab */}
           {activeTab === 'profile' && (
             <div className="p-6">
-              <div className="max-w-2xl mx-auto">
+              <div className="max-w-4xl mx-auto">
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="text-2xl font-bold text-gray-900">Profile Settings</h3>
                   <button
                     onClick={() => {
                       setEditMode(!editMode);
+                      setShowPasswordFields(false);
                       if (!editMode) {
                         setEditForm({
                           name: user.name,
                           email: user.email,
                           token: user.token,
+                          companycode: user.companycode,
+                          currentPassword: '',
+                          newPassword: '',
+                          confirmPassword: ''
                         });
+                        setSelectedSelections(user.states_counties || []);
                       }
                     }}
                     className={`px-4 py-2 rounded-lg transition-colors ${
@@ -607,50 +781,223 @@ const AgentDashboard = () => {
 
                 {editMode ? (
                   <form onSubmit={handleUpdateProfile} className="space-y-6">
-                    <div>
-                      <label className="block text-gray-700 mb-2">Name</label>
-                      <input
-                        type="text"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 outline-none"
-                        value={editForm.name || ''}
-                        onChange={(e) => setEditForm({...editForm, name: e.target.value})}
-                        required
-                        disabled={loading}
-                      />
+                    {/* Personal Information Section */}
+                    <div className="bg-gray-50 p-6 rounded-xl">
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4">Personal Information</h4>
+                      <div className="grid md:grid-cols-2 gap-6">
+                        <div>
+                          <label className="block text-gray-700 mb-2 font-medium">Name *</label>
+                          <input
+                            type="text"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 outline-none"
+                            value={editForm.name || ''}
+                            onChange={(e) => setEditForm({...editForm, name: e.target.value})}
+                            required
+                            disabled={loading}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-gray-700 mb-2 font-medium">Email *</label>
+                          <input
+                            type="email"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 outline-none"
+                            value={editForm.email || ''}
+                            onChange={(e) => setEditForm({...editForm, email: e.target.value})}
+                            required
+                            disabled={loading}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-gray-700 mb-2 font-medium">CRM Token *</label>
+                          <input
+                            type="text"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 outline-none"
+                            value={editForm.token || ''}
+                            onChange={(e) => setEditForm({...editForm, token: e.target.value})}
+                            required
+                            disabled={loading}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-gray-700 mb-2 font-medium">Company Code *</label>
+                          <select
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 outline-none"
+                            value={editForm.companycode || ''}
+                            onChange={(e) => setEditForm({...editForm, companycode: e.target.value})}
+                            required
+                            disabled={loading}
+                          >
+                            <option value="">Select Company</option>
+                            {companies.map((company) => (
+                              <option key={company.id} value={company.companycode}>
+                                {company.name} ({company.companycode})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-gray-700 mb-2">Email</label>
-                      <input
-                        type="email"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 outline-none"
-                        value={editForm.email || ''}
-                        onChange={(e) => setEditForm({...editForm, email: e.target.value})}
-                        required
-                        disabled={loading}
-                      />
+
+                    {/* Password Section */}
+                    <div className="bg-gray-50 p-6 rounded-xl">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-lg font-semibold text-gray-900">Password Settings</h4>
+                        <button
+                          type="button"
+                          onClick={() => setShowPasswordFields(!showPasswordFields)}
+                          className="text-red-600 hover:text-red-700 font-medium"
+                        >
+                          {showPasswordFields ? 'Cancel Password Change' : 'Change Password'}
+                        </button>
+                      </div>
+                      
+                      {showPasswordFields && (
+                        <div className="grid md:grid-cols-1 gap-6">
+                          <div>
+                            <label className="block text-gray-700 mb-2 font-medium">Current Password *</label>
+                            <input
+                              type="password"
+                              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 outline-none"
+                              value={editForm.currentPassword || ''}
+                              onChange={(e) => setEditForm({...editForm, currentPassword: e.target.value})}
+                              disabled={loading}
+                            />
+                          </div>
+                          <div className="grid md:grid-cols-2 gap-6">
+                            <div>
+                              <label className="block text-gray-700 mb-2 font-medium">New Password *</label>
+                              <input
+                                type="password"
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 outline-none"
+                                value={editForm.newPassword || ''}
+                                onChange={(e) => setEditForm({...editForm, newPassword: e.target.value})}
+                                disabled={loading}
+                                minLength="6"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-gray-700 mb-2 font-medium">Confirm New Password *</label>
+                              <input
+                                type="password"
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 outline-none"
+                                value={editForm.confirmPassword || ''}
+                                onChange={(e) => setEditForm({...editForm, confirmPassword: e.target.value})}
+                                disabled={loading}
+                                minLength="6"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div>
-                      <label className="block text-gray-700 mb-2">CRM Token</label>
-                      <input
-                        type="text"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 outline-none"
-                        value={editForm.token || ''}
-                        onChange={(e) => setEditForm({...editForm, token: e.target.value})}
-                        required
-                        disabled={loading}
-                      />
+
+                    {/* Service Areas Section */}
+                    <div className="bg-gray-50 p-6 rounded-xl">
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4">Service Areas *</h4>
+                      
+                      {/* Add New State/County */}
+                      <div className="grid md:grid-cols-3 gap-4 mb-4">
+                        <div>
+                          <label className="block text-gray-700 mb-2 font-medium">State</label>
+                          <select
+                            value={tempFormState.state}
+                            onChange={handleStateChange}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 outline-none"
+                            disabled={loading}
+                          >
+                            <option value="">Select State</option>
+                            {statesData.map(state => (
+                              <option key={state.state_FIPS} value={state.state_FIPS}>
+                                {state.state_name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-gray-700 mb-2 font-medium">County</label>
+                          <select
+                            value={tempFormState.county}
+                            onChange={(e) => setTempFormState(prev => ({...prev, county: parseInt(e.target.value, 10)}))}
+                            disabled={!tempFormState.state || loading}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 outline-none"
+                          >
+                            <option value="">Select County</option>
+                            {counties.map(county => (
+                              <option key={county.county_FIPS} value={county.county_FIPS}>
+                                {county.county_name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="flex items-end">
+                          <button
+                            type="button"
+                            onClick={addStateCountySelection}
+                            disabled={!tempFormState.state || !tempFormState.county || loading}
+                            className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                          >
+                            Add Area
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Selected Areas Display */}
+                      {selectedSelections.length > 0 && (
+                        <div className="space-y-4">
+                          <h5 className="font-medium text-gray-900">Selected Service Areas:</h5>
+                          {selectedSelections.map((state, stateIndex) => (
+                            <div key={state.state_FIPS} className="bg-white p-4 rounded-lg border">
+                              <div className="flex items-center justify-between mb-2">
+                                <h6 className="font-semibold text-gray-900">
+                                  {state.state_name} ({state.counties?.length || 0} counties)
+                                </h6>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                {state.counties?.map((county, countyIndex) => (
+                                  <div
+                                    key={county.county_FIPS}
+                                    className="flex items-center justify-between bg-blue-50 px-3 py-2 rounded text-sm"
+                                  >
+                                    <span>{county.county_name}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeStateCounty(stateIndex, countyIndex)}
+                                      className="text-red-600 hover:text-red-800 ml-2"
+                                      disabled={loading}
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <div className="flex space-x-4">
+
+                    {/* Action Buttons */}
+                    <div className="flex space-x-4 pt-4">
                       <button
                         type="submit"
-                        disabled={loading}
-                        className="bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+                        disabled={loading || selectedSelections.length === 0}
+                        className="bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center"
                       >
-                        {loading ? 'Saving...' : 'Save Changes'}
+                        {loading ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Saving...
+                          </>
+                        ) : (
+                          'Save Changes'
+                        )}
                       </button>
                       <button
                         type="button"
-                        onClick={() => setEditMode(false)}
+                        onClick={() => {
+                          setEditMode(false);
+                          setShowPasswordFields(false);
+                        }}
                         disabled={loading}
                         className="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"
                       >
@@ -693,17 +1040,12 @@ const AgentDashboard = () => {
                               <h5 className="font-semibold text-gray-900 mb-2">
                                 {state.state_name} ({state.counties?.length || 0} counties)
                               </h5>
-                              <div className="flex flex-wrap gap-2">
-                                {state.counties?.slice(0, 5).map((county, idx) => (
-                                  <span key={idx} className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                {state.counties?.map((county, idx) => (
+                                  <span key={idx} className="bg-blue-100 text-blue-800 px-3 py-1 rounded text-sm">
                                     {county.county_name}
                                   </span>
                                 ))}
-                                {state.counties?.length > 5 && (
-                                  <span className="text-gray-500 text-sm">
-                                    +{state.counties.length - 5} more
-                                  </span>
-                                )}
                               </div>
                             </div>
                           ))}
@@ -733,7 +1075,7 @@ const AgentDashboard = () => {
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm text-gray-600 mb-1">Session Time</p>
+                          <p className="text-sm text-gray-600 mb-1">Current Time</p>
                           <p className="text-lg font-medium text-gray-900">
                             {new Date().toLocaleTimeString()}
                           </p>

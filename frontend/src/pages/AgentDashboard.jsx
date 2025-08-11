@@ -13,6 +13,7 @@ const AgentDashboard = () => {
   const [editForm, setEditForm] = useState({});
   const [error, setError] = useState('');
   const [lastRefresh, setLastRefresh] = useState(null);
+  const [sessionStartTime, setSessionStartTime] = useState(null);
 
   // Enhanced profile editing state
   const [statesData, setStatesData] = useState([]);
@@ -188,7 +189,23 @@ const AgentDashboard = () => {
       setInitialLoading(false);
     }
   }, [user, fetchUserData, loadProperties, loadStats, initialLoading]);
+  
 
+
+  useEffect(() => {
+    if (user && !isInitializedRef.current) {
+      // Initialize session time from localStorage or create new one
+      const savedSessionStart = localStorage.getItem('sessionStartTime');
+      if (savedSessionStart) {
+        setSessionStartTime(new Date(savedSessionStart));
+      } else {
+        const newSessionTime = new Date();
+        setSessionStartTime(newSessionTime);
+        localStorage.setItem('sessionStartTime', newSessionTime.toISOString());
+      }
+      loadDashboardData();
+    }
+  }, [user]);
   // Initialize when edit mode is activated
   useEffect(() => {
     if (editMode) {
@@ -322,6 +339,7 @@ const AgentDashboard = () => {
       clearInterval(refreshIntervalRef.current);
       refreshIntervalRef.current = null;
     }
+    localStorage.removeItem('sessionStartTime'); // Clear session time
     logout();
     navigate('/agent-login');
   };
@@ -360,14 +378,17 @@ const AgentDashboard = () => {
   // Format session duration
   const formatSessionDuration = (startTime) => {
     if (!startTime) return 'New session';
+    
     const now = new Date();
     const diff = now - new Date(startTime);
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    
-    if (hours < 1) return 'Less than 1 hour';
-    if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''}`;
-    
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
+  
+    if (seconds < 60) return 'Just started';
+    if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+    if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''}`;
     return `${days} day${days !== 1 ? 's' : ''}`;
   };
 
@@ -1074,28 +1095,28 @@ const AgentDashboard = () => {
                       <h4 className="text-lg font-semibold text-gray-900 mb-4">Session Information</h4>
                       <div className="grid md:grid-cols-2 gap-6">
                         <div>
-                          <p className="text-sm text-gray-600 mb-1">Account Identifier</p>
+                          <p className="text-sm text-gray-600 mb-1">Account</p>
                           <p className="text-lg font-medium text-gray-900">
                             {user?.email || 'N/A'}
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm text-gray-600 mb-1">Auto-Refresh Status</p>
+                          <p className="text-sm text-gray-600 mb-1">Auto-Refresh</p>
                           <div className="flex items-center">
                             <span className="w-2 h-2 bg-green-500 rounded-full mr-2 auto-refresh-indicator"></span>
-                            <p className="text-lg font-medium text-gray-900">Active (15 min)</p>
+                            <p className="text-lg font-medium text-gray-900">Every 15 min</p>
                           </div>
                         </div>
                         <div>
                           <p className="text-sm text-gray-600 mb-1">Last Updated</p>
                           <p className="text-lg font-medium text-gray-900">
-                            {lastRefresh ? formatRelativeTime(lastRefresh) : 'Loading...'}
+                            {lastRefresh ? formatRelativeTime(lastRefresh) : 'Never'}
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm text-gray-600 mb-1">Current Session</p>
+                          <p className="text-sm text-gray-600 mb-1">Session Duration</p>
                           <p className="text-lg font-medium text-gray-900">
-                            {formatSessionDuration(user?.created_at)}
+                            {sessionStartTime ? formatSessionDuration(sessionStartTime) : 'New session'}
                           </p>
                         </div>
                       </div>

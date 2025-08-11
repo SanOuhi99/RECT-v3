@@ -812,7 +812,7 @@ const AgentDashboard = () => {
                             type="text"
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 outline-none"
                             value={editForm.companycode || ''}
-                            onChange={(e) => setEditForm({...editForm, companycode: e.target.value.toUpperCase()})}
+                            onChange={(e) => setEditForm({...editForm, companycode: e.target.value})}
                             placeholder="Enter your company code"
                             required
                             disabled={loading}

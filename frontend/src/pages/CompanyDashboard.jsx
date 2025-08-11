@@ -20,6 +20,13 @@ const CompanyDashboard = () => {
     password: '',
     states_counties: []
   });
+  const [statesData, setStatesData] = useState([]);
+  const [counties, setCounties] = useState([]);
+  const [tempFormState, setTempFormState] = useState({
+    state: '',
+    county: ''
+  });
+  const [selectedSelections, setSelectedSelections] = useState([]);
 
   const { company, logout, updateCompany, fetchCompanyAgents, fetchCompanyStats, fetchCompanyAnalytics, addAgent, deleteAgent, toggleAgentStatus } = useCompanyAuth();
   const navigate = useNavigate();
@@ -27,6 +34,94 @@ const CompanyDashboard = () => {
   useEffect(() => {
     loadDashboardData();
   }, []);
+
+  // Load states data when add agent modal opens
+  useEffect(() => {
+    if (showAddAgent) {
+      loadStatesData();
+    }
+  }, [showAddAgent]);
+
+  const loadStatesData = async () => {
+    try {
+      const response = await fetch(`${company.API_URL || 'https://backend-rectenvironment.up.railway.app'}/states_counties`);
+      const data = await response.json();
+      setStatesData(data);
+    } catch (error) {
+      console.error('Error loading states:', error);
+    }
+  };
+
+  const handleStateChange = (e) => {
+    const stateFIPS = parseInt(e.target.value, 10);
+    const selectedState = statesData.find(s => s.state_FIPS === stateFIPS);
+    setCounties(selectedState?.counties || []);
+    setTempFormState(prev => ({
+      ...prev,
+      state: stateFIPS,
+      county: ''
+    }));
+  };
+
+  const addStateCountySelection = () => {
+    if (!tempFormState.state || !tempFormState.county) {
+      alert("Please select both state and county");
+      return;
+    }
+
+    const state = statesData.find(s => s.state_FIPS === tempFormState.state);
+    const county = counties.find(c => c.county_FIPS === tempFormState.county);
+
+    const newSelection = {
+      state_FIPS: tempFormState.state,
+      state_name: state.state_name,
+      counties: [{
+        county_FIPS: tempFormState.county,
+        county_name: county.county_name
+      }]
+    };
+
+    // Check if state already exists in selections
+    const existingStateIndex = selectedSelections.findIndex(
+      s => s.state_FIPS === tempFormState.state
+    );
+
+    if (existingStateIndex !== -1) {
+      // Add county to existing state
+      const updatedSelections = [...selectedSelections];
+      const existingCounty = updatedSelections[existingStateIndex].counties.find(
+        c => c.county_FIPS === tempFormState.county
+      );
+      
+      if (!existingCounty) {
+        updatedSelections[existingStateIndex].counties.push({
+          county_FIPS: tempFormState.county,
+          county_name: county.county_name
+        });
+        setSelectedSelections(updatedSelections);
+      } else {
+        alert("This county is already selected");
+      }
+    } else {
+      // Add new state with county
+      setSelectedSelections(prev => [...prev, newSelection]);
+    }
+
+    setTempFormState({ state: '', county: '' });
+    setCounties([]);
+  };
+
+  const removeStateCounty = (stateIndex, countyIndex) => {
+    const updatedSelections = [...selectedSelections];
+    updatedSelections[stateIndex].counties.splice(countyIndex, 1);
+    
+    // Remove state if no counties left
+    if (updatedSelections[stateIndex].counties.length === 0) {
+      updatedSelections.splice(stateIndex, 1);
+    }
+    
+    setSelectedSelections(updatedSelections);
+  };
 
   const loadDashboardData = async () => {
     try {
@@ -101,28 +196,60 @@ const CompanyDashboard = () => {
     setError('');
 
     try {
-      const result = await addAgent({
-        ...newAgent,
-        companycode: company.companycode
-      });
-
-      if (result.success) {
-        setShowAddAgent(false);
-        setNewAgent({
-          name: '',
-          email: '',
-          token: '',
-          password: '',
-          states_counties: []
-        });
-        await loadDashboardData();
-        alert('Agent added successfully!');
-      } else {
-        setError(result.error || 'Failed to add agent');
+      // Validation
+      if (!newAgent.name.trim() || !newAgent.email.trim() || !newAgent.token.trim() || !newAgent.password.trim()) {
+        setError('Please fill in all required fields');
+        setLoading(false);
+        return;
       }
+
+      if (newAgent.password.length < 6) {
+        setError('Password must be at least 6 characters long');
+        setLoading(false);
+        return;
+      }
+
+      if (selectedSelections.length === 0) {
+        setError('Please select at least one state and county');
+        setLoading(false);
+        return;
+      }
+
+      const agentData = {
+        name: newAgent.name.trim(),
+        email: newAgent.email.trim(),
+        token: newAgent.token.trim(),
+        password: newAgent.password,
+        states_counties: selectedSelections
+      };
+
+      const result = await addAgent(agentData);
+      
+      setShowAddAgent(false);
+      setNewAgent({
+        name: '',
+        email: '',
+        token: '',
+        password: '',
+        states_counties: []
+      });
+      setSelectedSelections([]);
+      setTempFormState({ state: '', county: '' });
+      setCounties([]);
+      await loadDashboardData();
+      alert('Agent added successfully!');
+
     } catch (error) {
       console.error('Error adding agent:', error);
-      setError('Failed to add agent');
+      let errorMessage = 'Failed to add agent';
+      
+      if (error.message && error.message !== '[object Object]') {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -426,62 +553,197 @@ const CompanyDashboard = () => {
               {/* Add Agent Modal */}
               {showAddAgent && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                  <div className="bg-white rounded-lg p-6 w-full max-w-md">
+                  <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
                     <h4 className="text-lg font-bold text-gray-900 mb-4">Add New Agent</h4>
-                    <form onSubmit={handleAddAgent} className="space-y-4">
-                      <div>
-                        <label className="block text-gray-700 mb-2">Name *</label>
-                        <input
-                          type="text"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
-                          value={newAgent.name}
-                          onChange={(e) => setNewAgent({...newAgent, name: e.target.value})}
-                          required
-                        />
+                    
+                    {error && (
+                      <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                        {error}
                       </div>
-                      <div>
-                        <label className="block text-gray-700 mb-2">Email *</label>
-                        <input
-                          type="email"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
-                          value={newAgent.email}
-                          onChange={(e) => setNewAgent({...newAgent, email: e.target.value})}
-                          required
-                        />
+                    )}
+                    
+                    <form onSubmit={handleAddAgent} className="space-y-6">
+                      {/* Basic Information */}
+                      <div className="bg-gray-50 p-4 rounded-lg">
+                        <h5 className="font-semibold text-gray-900 mb-3">Basic Information</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-gray-700 mb-2">Name *</label>
+                            <input
+                              type="text"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
+                              value={newAgent.name}
+                              onChange={(e) => setNewAgent({...newAgent, name: e.target.value})}
+                              required
+                              disabled={loading}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-gray-700 mb-2">Email *</label>
+                            <input
+                              type="email"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
+                              value={newAgent.email}
+                              onChange={(e) => setNewAgent({...newAgent, email: e.target.value})}
+                              required
+                              disabled={loading}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-gray-700 mb-2">CRM Token *</label>
+                            <input
+                              type="text"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
+                              value={newAgent.token}
+                              onChange={(e) => setNewAgent({...newAgent, token: e.target.value})}
+                              required
+                              disabled={loading}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-gray-700 mb-2">Password *</label>
+                            <input
+                              type="password"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
+                              value={newAgent.password}
+                              onChange={(e) => setNewAgent({...newAgent, password: e.target.value})}
+                              required
+                              minLength="6"
+                              disabled={loading}
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <label className="block text-gray-700 mb-2">CRM Token *</label>
-                        <input
-                          type="text"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
-                          value={newAgent.token}
-                          onChange={(e) => setNewAgent({...newAgent, token: e.target.value})}
-                          required
-                        />
+
+                      {/* Service Areas */}
+                      <div className="bg-gray-50 p-4 rounded-lg">
+                        <h5 className="font-semibold text-gray-900 mb-3">Service Areas *</h5>
+                        
+                        {/* Add New State/County */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                          <div>
+                            <label className="block text-gray-700 mb-2 text-sm">State</label>
+                            <select
+                              value={tempFormState.state}
+                              onChange={handleStateChange}
+                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
+                              disabled={loading}
+                            >
+                              <option value="">Select State</option>
+                              {statesData.map(state => (
+                                <option key={state.state_FIPS} value={state.state_FIPS}>
+                                  {state.state_name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-gray-700 mb-2 text-sm">County</label>
+                            <select
+                              value={tempFormState.county}
+                              onChange={(e) => setTempFormState(prev => ({...prev, county: parseInt(e.target.value, 10)}))}
+                              disabled={!tempFormState.state || loading}
+                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
+                            >
+                              <option value="">Select County</option>
+                              {counties.map(county => (
+                                <option key={county.county_FIPS} value={county.county_FIPS}>
+                                  {county.county_name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="flex items-end">
+                            <button
+                              type="button"
+                              onClick={addStateCountySelection}
+                              disabled={!tempFormState.state || !tempFormState.county || loading}
+                              className="w-full bg-green-600 text-white px-3 py-2 text-sm rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+                            >
+                              <i className="fas fa-plus mr-1"></i>
+                              Add Area
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Selected Areas Display */}
+                        {selectedSelections.length > 0 && (
+                          <div className="space-y-3">
+                            <h6 className="font-medium text-gray-900 text-sm">Selected Service Areas:</h6>
+                            {selectedSelections.map((state, stateIndex) => (
+                              <div key={state.state_FIPS} className="bg-white p-3 rounded-lg border">
+                                <div className="flex items-center justify-between mb-2">
+                                  <h6 className="font-semibold text-gray-900 text-sm">
+                                    {state.state_name} ({state.counties?.length || 0} counties)
+                                  </h6>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  {state.counties?.map((county, countyIndex) => (
+                                    <div
+                                      key={county.county_FIPS}
+                                      className="flex items-center justify-between bg-blue-50 px-2 py-1 rounded text-xs"
+                                    >
+                                      <span>{county.county_name}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => removeStateCounty(stateIndex, countyIndex)}
+                                        className="text-red-600 hover:text-red-800 ml-2"
+                                        disabled={loading}
+                                      >
+                                        ×
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {selectedSelections.length === 0 && (
+                          <div className="text-center py-4 text-gray-500 text-sm">
+                            No service areas selected. Please add at least one state and county.
+                          </div>
+                        )}
                       </div>
-                      <div>
-                        <label className="block text-gray-700 mb-2">Password *</label>
-                        <input
-                          type="password"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
-                          value={newAgent.password}
-                          onChange={(e) => setNewAgent({...newAgent, password: e.target.value})}
-                          required
-                          minLength="6"
-                        />
-                      </div>
+
+                      {/* Action Buttons */}
                       <div className="flex space-x-4 pt-4">
                         <button
                           type="submit"
-                          disabled={loading}
-                          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                          disabled={loading || selectedSelections.length === 0}
+                          className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center"
                         >
-                          Add Agent
+                          {loading ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                              Adding Agent...
+                            </>
+                          ) : (
+                            <>
+                              <i className="fas fa-plus mr-2"></i>
+                              Add Agent
+                            </>
+                          )}
                         </button>
                         <button
                           type="button"
-                          onClick={() => setShowAddAgent(false)}
-                          className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
+                          onClick={() => {
+                            setShowAddAgent(false);
+                            setNewAgent({
+                              name: '',
+                              email: '',
+                              token: '',
+                              password: '',
+                              states_counties: []
+                            });
+                            setSelectedSelections([]);
+                            setTempFormState({ state: '', county: '' });
+                            setCounties([]);
+                            setError('');
+                          }}
+                          disabled={loading}
+                          className="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"
                         >
                           Cancel
                         </button>

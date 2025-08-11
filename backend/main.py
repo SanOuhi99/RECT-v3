@@ -299,7 +299,16 @@ class OwnerUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[EmailStr] = None
     token: Optional[str] = None
+    companycode: Optional[str] = None
     states_counties: Optional[List[StateCounties]] = None
+    current_password: Optional[str] = None
+    new_password: Optional[str] = None
+
+    @validator('new_password')
+    def password_min_length(cls, v):
+        if v and len(v) < 6:
+            raise ValueError('Password must be at least 6 characters')
+        return v
 
 # Login schemas
 class LoginRequest(BaseModel):
@@ -373,9 +382,23 @@ def update_current_user(
     current_user: CrmOwner = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    # Update only provided fields
+    # Handle password change if requested
+    if user_update.current_password and user_update.new_password:
+        # Verify current password
+        if not verify_password(user_update.current_password, current_user.password):
+            raise HTTPException(status_code=400, detail="Current password is incorrect")
+        
+        # Update to new password
+        current_user.password = hash_password(user_update.new_password)
+    elif user_update.current_password or user_update.new_password:
+        # If only one password field is provided, require both
+        raise HTTPException(status_code=400, detail="Both current and new passwords are required for password change")
+
+    # Update name if provided
     if user_update.name is not None:
         current_user.name = user_update.name
+    
+    # Update email if provided
     if user_update.email is not None:
         # Check if email is already taken by another user
         existing = db.query(CrmOwner).filter(
@@ -385,15 +408,65 @@ def update_current_user(
         if existing:
             raise HTTPException(status_code=400, detail="Email already registered")
         current_user.email = user_update.email
+    
+    # Update company code if provided
+    if user_update.companycode is not None:
+        # Verify the company code exists
+        company = db.query(Company).filter(Company.companycode == user_update.companycode).first()
+        if not company:
+            raise HTTPException(status_code=400, detail="Invalid company code")
+        current_user.companycode = user_update.companycode
+    
+    # Update CRM token if provided
     if user_update.token is not None:
         current_user.token = user_update.token
+    
+    # Update states_counties if provided
     if user_update.states_counties is not None:
+        # Validate that states and counties exist
+        for state_county in user_update.states_counties:
+            # Verify state exists
+            state_exists = db.query(StatesCounties).filter(
+                StatesCounties.statefips == state_county.state_FIPS
+            ).first()
+            if not state_exists:
+                raise HTTPException(status_code=400, detail=f"Invalid state FIPS: {state_county.state_FIPS}")
+            
+            # Verify counties exist
+            for county in state_county.counties:
+                county_exists = db.query(StatesCounties).filter(
+                    StatesCounties.statefips == state_county.state_FIPS,
+                    StatesCounties.countyfips == county.county_FIPS
+                ).first()
+                if not county_exists:
+                    raise HTTPException(status_code=400, detail=f"Invalid county FIPS: {county.county_FIPS} for state: {state_county.state_FIPS}")
+        
         current_user.states_counties = [sc.dict() for sc in user_update.states_counties]
     
-    db.commit()
-    db.refresh(current_user)
+    # Commit all changes
+    try:
+        db.commit()
+        db.refresh(current_user)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update profile")
+    
     return current_user
 
+@app.get("/companies/list")
+def get_companies_list(db: Session = Depends(get_db)):
+    """
+    Get list of companies for dropdown selection
+    """
+    companies = db.query(Company.id, Company.name, Company.companycode).all()
+    return [
+        {
+            "id": company.id,
+            "name": company.name,
+            "companycode": company.companycode
+        }
+        for company in companies
+    ]
 
 # Existing endpoints
 @app.get("/states_counties", response_model=List[StateCounties])

@@ -864,13 +864,49 @@ def get_all_users(
     total = query.count()
     users = query.offset((page - 1) * page_size).limit(page_size).all()
     
+    # Add detailed property stats for each user
+    users_with_properties = []
+    for user in users:
+        # Total properties
+        total_properties = db.query(SeenProperties).filter(
+            SeenProperties.crm_owner_id == user.id
+        ).count()
+        
+        # Recent properties (last 30 days)
+        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        recent_properties = db.query(SeenProperties).filter(
+            SeenProperties.crm_owner_id == user.id,
+            SeenProperties.created_at >= thirty_days_ago
+        ).count()
+        
+        # Properties with contracts
+        properties_with_contracts = db.query(SeenProperties).filter(
+            SeenProperties.crm_owner_id == user.id,
+            SeenProperties.contract_date.isnot(None)
+        ).count()
+        
+        user_dict = {
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "companycode": user.companycode,
+            "states_counties": user.states_counties,
+            "property_count": total_properties,
+            "recent_properties": recent_properties,
+            "properties_with_contracts": properties_with_contracts,
+            "assigned_states": len(user.states_counties) if user.states_counties else 0
+        }
+        users_with_properties.append(user_dict)
+    
     return {
-        "users": users,
+        "users": users_with_properties,
         "pagination": {
             "page": page,
             "page_size": page_size,
             "total": total,
-            "total_pages": (total + page_size - 1) // page_size
+            "total_pages": (total + page_size - 1) // page_size,
+            "has_next": page * page_size < total,
+            "has_prev": page > 1
         }
     }
 

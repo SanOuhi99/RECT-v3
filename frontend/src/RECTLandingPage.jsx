@@ -228,6 +228,11 @@ const RECTLandingPage = () => {
                 desc: 'Register your company to provide access to your agents.',
                 actions: [
                   {
+                    label: 'Company Login',
+                    to: '/company-login',
+                    outline: false,
+                  },
+                  {
                     label: 'Register Company',
                     to: '/company-register',
                     outline: false,

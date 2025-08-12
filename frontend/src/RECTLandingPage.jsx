@@ -235,7 +235,7 @@ const RECTLandingPage = () => {
                   {
                     label: 'Register Company',
                     to: '/company-register',
-                    outline: false,
+                    outline: true,
                   },
                 ],
               },

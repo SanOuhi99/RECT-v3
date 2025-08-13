@@ -28,30 +28,48 @@ from datetime import datetime
 
 # Load environment variables
 load_dotenv()
+ 
+
+
 def should_run_this_month():
     today = datetime.today()
-
-    # Get current month number (e.g., 7 for July)
     current_month = today.month
 
-    # Read last run month from env
-    last_run_month = int(os.getenv("LAST_RUN_MONTH", "0"))
-
-    # Must be a weekday (Mon–Fri)
-    if today.weekday() > 5:
-        print("{today.weekday()} > 5")
+    # Check if it's a weekday (Mon-Fri)
+    if today.weekday() > 4:  # 5 and 6 are Saturday and Sunday
+        print(f"Today is weekend ({today.weekday()}), not running.")
         return False
 
+    # Read from last_run_month.txt file
+    try:
+        with open("last_run_month.txt", "r") as f:
+            last_run_month = int(f.read().strip())
+    except FileNotFoundError:
+        # If file doesn't exist, create it with current month
+        with open("last_run_month.txt", "w") as f:
+            f.write(str(current_month))
+        return True  # First run
+    except Exception as e:
+        print(f"Error reading last_run_month.txt: {e}")
+        return False
 
     if current_month == last_run_month:
-        print("Already ran this month.")
+        print(f"Already ran this month (last run: {last_run_month}).")
         return False
 
     return True
 
-if not should_run_this_month():
-    print("Exiting — not first weekday or already ran.")
-    exit(0)
+
+def update_last_run_month():
+    current_month = datetime.today().month
+    try:
+        with open("last_run_month.txt", "w") as f:
+            f.write(str(current_month))
+        print(f"(✓) Updated last_run_month.txt to {current_month}")
+    except Exception as e:
+        print(f"(X) Failed to update last_run_month.txt: {e}")
+
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise Exception("DATABASE_URL environment variable not set")
@@ -756,30 +774,36 @@ def perform_search_for_contact(contact_details, state_fips, county_fips, crm_own
     if results:
         result_queue.put(results)  # Store results in the queue
 
-# --- Update LAST_RUN_MONTH in .env (or print new value if using Railway) ---
-def update_last_run_month():
-    current_month = datetime.today().month
-    os.environ["LAST_RUN_MONTH"] = str(current_month)
-
-    # If you are using a local .env file (dev only), update it
-    dotenv_path = ".env"
-    if os.path.exists(dotenv_path):
-        with open(dotenv_path, "r") as file:
-            lines = file.readlines()
-
-        with open(dotenv_path, "w") as file:
-            found = False
-            for line in lines:
-                if line.startswith("LAST_RUN_MONTH="):
-                    file.write(f"LAST_RUN_MONTH={current_month}\n")
-                    found = True
-                else:
-                    file.write(line)
-            if not found:
-                file.write(f"LAST_RUN_MONTH={current_month}\n")
-
-    print(f"(✓) Updated LAST_RUN_MONTH to {current_month}")
 
 if __name__ == "__main__":
-    search_datatree_thread()
-    update_last_run_month()
+    print("="*50)
+    print(f"Script started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("="*50)
+    
+    try:
+        # Check if we should run this month
+        if not should_run_this_month():
+            print("Exiting - not first weekday or already ran this month.")
+            exit(0)
+            
+        print("Starting property search process...")
+        
+        # Execute the main search function
+        search_datatree_thread()
+        
+        # Update last run month only if successful
+        update_last_run_month()
+        
+        print("="*50)
+        print("Script completed successfully!")
+        print(f"Finished at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print("="*50)
+        
+    except Exception as e:
+        print("!"*50)
+        print(f"CRITICAL ERROR: {str(e)}")
+        print("!"*50)
+        print("Stack Trace:")
+        import traceback
+        traceback.print_exc()
+        exit(1)  # Exit with error code

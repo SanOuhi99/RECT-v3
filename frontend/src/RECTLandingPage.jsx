@@ -40,12 +40,19 @@ const RECTLandingPage = () => {
         setFormData({ name: '', email: '', subject: '', message: '' });
       } else {
         console.error('Error response:', result);
-        if (result.errors) {
-          // Handle validation errors
-          const errorMessages = result.errors.map(err => `${err.loc.join('.')}: ${err.msg}`).join('\n');
+        if (result.detail && Array.isArray(result.detail)) {
+          // Handle validation errors from FastAPI
+          const errorMessages = result.detail.map(err => {
+            const field = err.loc ? err.loc.slice(1).join('.') : 'field';
+            return `${field}: ${err.msg}`;
+          }).join('\n');
           alert(`Please fix the following errors:\n${errorMessages}`);
+        } else if (result.detail) {
+          alert(`Error: ${result.detail}`);
+        } else if (result.message) {
+          alert(`Error: ${result.message}`);
         } else {
-          throw new Error(result.detail || result.message || 'Something went wrong');
+          alert('Something went wrong. Please try again.');
         }
       }
     } catch (error) {

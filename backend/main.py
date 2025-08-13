@@ -1646,37 +1646,40 @@ def get_company_analytics(current_company: Company = Depends(get_current_company
 
 # Contact Us endpoint
 @app.post("/contact")
-def submit_contact_form(contact_data: ContactForm):
+async def submit_contact_form(contact_data: ContactForm):
     """
     Handle contact form submissions and send email notifications
     """
-    if not all([SENDER_EMAIL, SMTP_PASSWORD, SMTP_SERVER]):
-        raise HTTPException(
-            status_code=500, 
-            detail="Email configuration not properly set up"
-        )
-    
-    # Create email content
-    email_subject = f"RECT Contact Form: {contact_data.subject}"
-    email_body = f"""
-    <html>
-        <head></head>
-        <body>
-            <h2>New Contact Form Submission</h2>
-            <p><strong>From:</strong> {contact_data.name} ({contact_data.email})</p>
-            <p><strong>Subject:</strong> {contact_data.subject}</p>
-            <p><strong>Message:</strong></p>
-            <p>{contact_data.message.replace(chr(10), '<br>')}</p>
-            <hr>
-            <p><small>This message was sent from the RECT contact form.</small></p>
-        </body>
-    </html>
-    """
-    
-    # Send email to your business email (you can set this as another env var)
-    business_email = Admin_EMAIL  # or set BUSINESS_EMAIL env var
-    
     try:
+        # Validate the data (Pydantic will do this automatically, but we can add logging)
+        print(f"Contact form data received: {contact_data.dict()}")
+        
+        if not all([SENDER_EMAIL, SMTP_PASSWORD, SMTP_SERVER]):
+            raise HTTPException(
+                status_code=500, 
+                detail="Email configuration not properly set up"
+            )
+        
+        # Create email content
+        email_subject = f"RECT Contact Form: {contact_data.subject}"
+        email_body = f"""
+        <html>
+            <head></head>
+            <body>
+                <h2>New Contact Form Submission</h2>
+                <p><strong>From:</strong> {contact_data.name} ({contact_data.email})</p>
+                <p><strong>Subject:</strong> {contact_data.subject}</p>
+                <p><strong>Message:</strong></p>
+                <p>{contact_data.message.replace(chr(10), '<br>')}</p>
+                <hr>
+                <p><small>This message was sent from the RECT contact form.</small></p>
+            </body>
+        </html>
+        """
+        
+        # Send email to your business email (you can set this as another env var)
+        business_email = Admin_EMAIL  # or set BUSINESS_EMAIL env var
+        
         success = send_email(business_email, email_subject, email_body)
         
         if success:
@@ -1701,9 +1704,25 @@ def submit_contact_form(contact_data: ContactForm):
         else:
             raise HTTPException(status_code=500, detail="Failed to send message")
             
+    except ValueError as ve:
+        print(f"Validation error: {ve}")
+        raise HTTPException(status_code=422, detail=str(ve))
     except Exception as e:
         print(f"Contact form error: {e}")
         raise HTTPException(status_code=500, detail="Failed to send message")
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    print(f"Validation error details: {exc.errors()}")
+    print(f"Request body: {exc.body}")
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": "Validation error", 
+            "errors": exc.errors(),
+            "message": "Please check your form data and try again"
+        },
+    )
 
 # System health endpoints
 @app.get("/admin/system/health")

@@ -14,6 +14,10 @@ from passlib.context import CryptContext
 import jwt
 import csv
 from pathlib import Path
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
 
 load_dotenv()  # Load env vars from .env if present
 
@@ -21,6 +25,10 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-this")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
+SENDER_EMAIL = os.getenv("SENDER_EMAIL")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
+SMTP_SERVER = os.getenv("SMTP_SERVER")
 
 if not DATABASE_URL:
     raise Exception("DATABASE_URL environment variable not set")
@@ -430,6 +438,59 @@ class SeenPropertyOut(BaseModel):
 
     class Config:
         orm_mode = True
+
+# Contact Us schemas
+class ContactForm(BaseModel):
+    name: str
+    email: EmailStr
+    subject: str
+    message: str
+
+    @validator('name')
+    def name_must_not_be_empty(cls, v):
+        if not v.strip():
+            raise ValueError('Name cannot be empty')
+        return v.strip()
+
+    @validator('subject')
+    def subject_must_not_be_empty(cls, v):
+        if not v.strip():
+            raise ValueError('Subject cannot be empty')
+        return v.strip()
+
+    @validator('message')
+    def message_must_not_be_empty(cls, v):
+        if not v.strip():
+            raise ValueError('Message cannot be empty')
+        return v.strip()
+
+def send_email(to_email: str, subject: str, body: str, sender_name: str = None):
+    """Send email using SMTP"""
+    try:
+        # Create message
+        msg = MIMEMultipart()
+        msg['From'] = SENDER_EMAIL
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        
+        # Add body to email
+        msg.attach(MIMEText(body, 'html'))
+        
+        # Create SMTP session
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()  # Enable security
+        server.login(SENDER_EMAIL, SMTP_PASSWORD)
+        
+        # Send email
+        text = msg.as_string()
+        server.sendmail(SENDER_EMAIL, to_email, text)
+        server.quit()
+        
+        return True
+    except Exception as e:
+        print(f"Email sending failed: {e}")
+        return False
+
 
 # --- FastAPI app ---
 app = FastAPI()
@@ -1582,6 +1643,66 @@ def get_company_analytics(current_company: Company = Depends(get_current_company
         "performance_metrics": performance_metrics
     }
 
+# Contact Us endpoint
+@app.post("/contact")
+def submit_contact_form(contact_data: ContactForm):
+    """
+    Handle contact form submissions and send email notifications
+    """
+    if not all([SENDER_EMAIL, SMTP_PASSWORD, SMTP_SERVER]):
+        raise HTTPException(
+            status_code=500, 
+            detail="Email configuration not properly set up"
+        )
+    
+    # Create email content
+    email_subject = f"RECT Contact Form: {contact_data.subject}"
+    email_body = f"""
+    <html>
+        <head></head>
+        <body>
+            <h2>New Contact Form Submission</h2>
+            <p><strong>From:</strong> {contact_data.name} ({contact_data.email})</p>
+            <p><strong>Subject:</strong> {contact_data.subject}</p>
+            <p><strong>Message:</strong></p>
+            <p>{contact_data.message.replace(chr(10), '<br>')}</p>
+            <hr>
+            <p><small>This message was sent from the RECT contact form.</small></p>
+        </body>
+    </html>
+    """
+    
+    # Send email to your business email (you can set this as another env var)
+    business_email = SENDER_EMAIL  # or set BUSINESS_EMAIL env var
+    
+    try:
+        success = send_email(business_email, email_subject, email_body)
+        
+        if success:
+            # Optionally send confirmation email to the customer
+            confirmation_subject = "Thank you for contacting RECT"
+            confirmation_body = f"""
+            <html>
+                <head></head>
+                <body>
+                    <h2>Thank you for your message, {contact_data.name}!</h2>
+                    <p>We've received your message and will get back to you soon.</p>
+                    <p><strong>Your message:</strong></p>
+                    <p>{contact_data.message.replace(chr(10), '<br>')}</p>
+                    <hr>
+                    <p>Best regards,<br>The RECT Team</p>
+                </body>
+            </html>
+            """
+            send_email(contact_data.email, confirmation_subject, confirmation_body)
+            
+            return {"message": "Message sent successfully", "success": True}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to send message")
+            
+    except Exception as e:
+        print(f"Contact form error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send message")
 
 # System health endpoints
 @app.get("/admin/system/health")

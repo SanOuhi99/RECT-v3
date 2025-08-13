@@ -22,7 +22,7 @@ const RECTLandingPage = () => {
     setIsSubmitting(true);
   
     try {
-      const response = await fetch('/contact', {
+      const response = await fetch('https://backend-rectenvironment.up.railway.app/contact', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

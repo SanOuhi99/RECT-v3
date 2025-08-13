@@ -22,6 +22,8 @@ const RECTLandingPage = () => {
     setIsSubmitting(true);
   
     try {
+      console.log('Sending contact form data:', formData); // Debug log
+      
       const response = await fetch('https://backend-rectenvironment.up.railway.app/contact', {
         method: 'POST',
         headers: {
@@ -31,12 +33,20 @@ const RECTLandingPage = () => {
       });
   
       const result = await response.json();
+      console.log('Response:', result); // Debug log
   
       if (response.ok) {
         alert('Thank you for your message! We\'ll get back to you soon.');
         setFormData({ name: '', email: '', subject: '', message: '' });
       } else {
-        throw new Error(result.detail || 'Something went wrong');
+        console.error('Error response:', result);
+        if (result.errors) {
+          // Handle validation errors
+          const errorMessages = result.errors.map(err => `${err.loc.join('.')}: ${err.msg}`).join('\n');
+          alert(`Please fix the following errors:\n${errorMessages}`);
+        } else {
+          throw new Error(result.detail || result.message || 'Something went wrong');
+        }
       }
     } catch (error) {
       console.error('Contact form error:', error);

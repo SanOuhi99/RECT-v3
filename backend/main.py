@@ -26,6 +26,7 @@ JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-this")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
+Admin_EMAIL = os.getenv("Admin_EMAIL")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
 SMTP_SERVER = os.getenv("SMTP_SERVER")
@@ -1673,7 +1674,7 @@ def submit_contact_form(contact_data: ContactForm):
     """
     
     # Send email to your business email (you can set this as another env var)
-    business_email = SENDER_EMAIL  # or set BUSINESS_EMAIL env var
+    business_email = Admin_EMAIL  # or set BUSINESS_EMAIL env var
     
     try:
         success = send_email(business_email, email_subject, email_body)

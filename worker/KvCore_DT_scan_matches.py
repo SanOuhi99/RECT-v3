@@ -243,7 +243,7 @@ def save_property_to_seen_properties(crm_owner_id, property_data, contact_detail
             contact_last_name=contact_details.get("last_name"),
             contact_middle_name=contact_details.get("middle_name"),
             name_variation=property_data.get("Name Variation"),
-            contract_date=contract_date  # Save the parsed contract date
+            contract_date=contract_date,  # Save the parsed contract date
             created_at = datetime.now().strftime('%Y-%m-%d')
         )
         

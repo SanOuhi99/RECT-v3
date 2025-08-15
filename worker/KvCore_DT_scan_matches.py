@@ -131,6 +131,7 @@ class SeenProperties(Base):
     contact_last_name = Column(String)
     contact_middle_name = Column(String)
     name_variation = Column(String)
+    contract_date = Column(DateTime)  # New column for sale date
     created_at = Column(DateTime, server_default=func.now())
 
 # Create database session
@@ -217,6 +218,18 @@ def save_property_to_seen_properties(crm_owner_id, property_data, contact_detail
     """
     db = get_db()
     try:
+        # Parse the contract date if it exists
+        contract_date = None
+        if property_data.get("Contract Date"):
+            try:
+                # Parse the ISO format date string to datetime object
+                contract_date_str = property_data.get("Contract Date")
+                if contract_date_str:
+                    contract_date = datetime.fromisoformat(contract_date_str.replace('T', ' ').replace('Z', ''))
+            except (ValueError, AttributeError) as e:
+                print(f"Error parsing contract date '{property_data.get('Contract Date')}': {e}")
+                contract_date = None
+        
         seen_property = SeenProperties(
             crm_owner_id=crm_owner_id,
             property_id=property_data.get("Property ID"),
@@ -229,12 +242,13 @@ def save_property_to_seen_properties(crm_owner_id, property_data, contact_detail
             contact_first_name=contact_details.get("first_name"),
             contact_last_name=contact_details.get("last_name"),
             contact_middle_name=contact_details.get("middle_name"),
-            name_variation=property_data.get("Name Variation")
+            name_variation=property_data.get("Name Variation"),
+            contract_date=contract_date  # Save the parsed contract date
         )
         
         db.add(seen_property)
         db.commit()
-        print(f"Saved property {property_data.get('Property ID')} to seen_properties table")
+        print(f"Saved property {property_data.get('Property ID')} with contract date {contract_date} to seen_properties table")
         
     except Exception as e:
         print(f"Error saving property to seen_properties table: {e}")
@@ -426,24 +440,29 @@ def fetch_property_details(property_id):
             report_data = property_report.get("Data", {})
             subject_property = report_data.get("SubjectProperty", {})
             owner_info = report_data.get("OwnerInformation", {})
+            owner_transfer_info = report_data.get("OwnerTransferInformation", {})
 
             property_id = subject_property.get("PropertyId", "N/A")
             street_address = subject_property.get("SitusAddress", {}).get("StreetAddress", "N/A")
             County = subject_property.get("SitusAddress", {}).get("County", "N/A")
             State = subject_property.get("SitusAddress", {}).get("State", "N/A")
             owner_names = owner_info.get("OwnerNames", "N/A")
-            seller_name = report_data.get("OwnerTransferInformation", {}).get("SellerName", "N/A")
-            print(f"PropertyId {property_id} : {owner_names} : {street_address} : {seller_name} : ")
-            if property_id == "N/A" :
+            seller_name = owner_transfer_info.get("SellerName", "N/A")
+            sale_date = owner_transfer_info.get("SaleDate", None)  # Extract sale date
+            
+            print(f"PropertyId {property_id} : {owner_names} : {street_address} : {seller_name} : {sale_date}")
+            
+            if property_id == "N/A":
                 return None
-            else :
+            else:
                 return {
                     "PropertyId": property_id,
                     "OwnerNames": owner_names,
                     "StreetAddress": street_address,
                     "County": County,
                     "State": State,
-                    "SellerName": seller_name
+                    "SellerName": seller_name,
+                    "SaleDate": sale_date  # Include sale date in return
                 }
         else:
             print(f"PropertyId {property_id}: No report found.")
@@ -623,7 +642,8 @@ def fetch_report_from_datatree(state_fips, county_fips, crm_owner, contact_detai
                         "Property ID": property_details["PropertyId"],
                         "Owner Name": property_details["OwnerNames"],
                         "Street Address": property_details["StreetAddress"],
-                        "Seller Name": property_details["SellerName"]
+                        "Seller Name": property_details["SellerName"],
+                        "Contract Date": property_details["SaleDate"]  
                     }
                     data_collection.append(data_row)
                     

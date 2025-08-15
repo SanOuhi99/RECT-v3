@@ -225,7 +225,11 @@ def save_property_to_seen_properties(crm_owner_id, property_data, contact_detail
                 # Parse the ISO format date string to datetime object
                 contract_date_str = property_data.get("Contract Date")
                 if contract_date_str:
-                    contract_date = datetime.fromisoformat(contract_date_str.replace('T', ' ').replace('Z', ''))
+                    # Handle different date formats
+                    if 'T' in contract_date_str:
+                        contract_date = datetime.fromisoformat(contract_date_str.replace('T', ' ').replace('Z', ''))
+                    else:
+                        contract_date = datetime.strptime(contract_date_str, '%Y-%m-%d')
             except (ValueError, AttributeError) as e:
                 print(f"Error parsing contract date '{property_data.get('Contract Date')}': {e}")
                 contract_date = None
@@ -244,7 +248,7 @@ def save_property_to_seen_properties(crm_owner_id, property_data, contact_detail
             contact_middle_name=contact_details.get("middle_name"),
             name_variation=property_data.get("Name Variation"),
             contract_date=contract_date,  # Save the parsed contract date
-            created_at = datetime.now().strftime('%Y-%m-%d')
+            created_at=datetime.now()  # Set when the data was fetched (as datetime object, not string)
         )
         
         db.add(seen_property)
@@ -301,15 +305,27 @@ def send_email_with_attachment(crm_owner, file_path):
     msg.set_content("This email contains an HTML version.", subtype="plain")
     msg.add_alternative(body, subtype="html")
 
-    # Attach the CRM data CSV
+    # Attach the Excel file (not CSV)
     file_name = os.path.basename(file_path)
     try:
+        # Check if file exists before trying to attach
+        if not os.path.exists(file_path):
+            print(f"(X) File not found: {file_path}")
+            return False
+            
         with open(file_path, "rb") as f:
-            msg.add_attachment(f.read(), maintype="application", subtype="csv", filename=file_name)
+            # Use correct MIME type for Excel files
+            if file_path.endswith('.xlsx'):
+                msg.add_attachment(f.read(), maintype="application", subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename=file_name)
+            else:
+                msg.add_attachment(f.read(), maintype="application", subtype="octet-stream", filename=file_name)
 
         # Attach the logo
-        with open(LOGO_PATH, "rb") as f:
-            msg.add_attachment(f.read(), maintype="image", subtype="jpeg", filename="logo.jpg", cid="logo_cid")
+        if os.path.exists(LOGO_PATH):
+            with open(LOGO_PATH, "rb") as f:
+                msg.add_attachment(f.read(), maintype="image", subtype="jpeg", filename="logo.jpg", cid="logo_cid")
+        else:
+            print(f"(!) Logo file not found: {LOGO_PATH}")
 
         # Send the email
         context = ssl.create_default_context()
@@ -318,16 +334,21 @@ def send_email_with_attachment(crm_owner, file_path):
             server.login(SMTP_USERNAME, SMTP_PASSWORD)
             server.send_message(msg)
 
-        print("(V) Email with attachment and logo sent successfully!")
+        print(f"(✓) Email with attachment sent successfully to {crm_owner['email']}!")
+        return True
     
     except FileNotFoundError as e:
         print(f"(X) File not found: {e}")
+        return False
     except smtplib.SMTPAuthenticationError:
         print("(X) SMTP Authentication Error: Check your email credentials.")
+        return False
     except smtplib.SMTPException as e:
         print(f"(X) SMTP Error: {e}")
+        return False
     except Exception as e:
-        print(f"(X) Unexpected error: {e}")
+        print(f"(X) Unexpected error sending email: {e}")
+        return False
 
 def save_to_excel(data_to_be_saved, crm_owner):
     """
@@ -337,58 +358,77 @@ def save_to_excel(data_to_be_saved, crm_owner):
     t = 1 
     if not data_to_be_saved:
         print(f"No data to save for {crm_owner['Name']}")
-        return
-
-    df = pd.DataFrame(data_to_be_saved)
-    
-    # Create folder with current month name
-    current_month_folder = datetime.now().strftime('%B_%Y')  # e.g., "August_2025"
-    os.makedirs(current_month_folder, exist_ok=True)  # Create folder if it doesn't exist
-    print(f"Created/Using folder: {current_month_folder}")
-    
-    # Create file path within the month folder
-    file_name = f"matches_of_{datetime.now().strftime('%b_%Y').lower()}_{crm_owner['Name']}.xlsx"
-    file_path = os.path.join(current_month_folder, file_name)
-    
-    # Handle file naming conflicts
-    if os.path.exists(file_path):
-        while os.path.exists(os.path.join(current_month_folder, f"matches_of_{datetime.now().strftime('%b_%Y').lower()}_{crm_owner['Name']}({t}).xlsx")):
-            t = t + 1
-        file_name = f"matches_of_{datetime.now().strftime('%b_%Y').lower()}_{crm_owner['Name']}({t}).xlsx"
-        file_path = os.path.join(current_month_folder, file_name)
-
-    retries = 0
-    # Convert environment variable to integer with a default value
-    max_retries = int(os.getenv("Excel_MAX_RETRIES", "5"))  # Default to 5 if not set
-
-    while is_file_open(file_path) and retries < max_retries:
-        print(f"File '{file_path}' is in use. Retrying in 2 seconds...")
-        time.sleep(2)  # Wait for 2 seconds before retrying
-        retries += 1
-
-    if retries >= max_retries:
-        print(f"File '{file_path}' is still locked after {max_retries} attempts. Please close it.")
-        return
+        return False
 
     try:
-        # Determine the mode and the usage of the if_sheet_exists parameter
-        mode = 'a' if os.path.exists(file_path) else 'w'
+        df = pd.DataFrame(data_to_be_saved)
+        print(f"Created DataFrame with {len(df)} rows for {crm_owner['Name']}")
         
-        # If the file exists and we're appending, use if_sheet_exists='overlay'
-        if mode == 'a':
-            with pd.ExcelWriter(file_path, engine='openpyxl', mode=mode, if_sheet_exists='overlay') as writer:
+        # Create folder with current month name
+        current_month_folder = datetime.now().strftime('%B_%Y')  # e.g., "August_2025"
+        
+        # Create full path to the folder
+        full_folder_path = os.path.join(DATA_DIR, current_month_folder)
+        os.makedirs(full_folder_path, exist_ok=True)  # Create folder if it doesn't exist
+        print(f"Created/Using folder: {full_folder_path}")
+        
+        # Create file path within the month folder
+        file_name = f"matches_of_{datetime.now().strftime('%b_%Y').lower()}_{crm_owner['Name']}.xlsx"
+        file_path = os.path.join(full_folder_path, file_name)
+        
+        # Handle file naming conflicts
+        if os.path.exists(file_path):
+            while os.path.exists(os.path.join(full_folder_path, f"matches_of_{datetime.now().strftime('%b_%Y').lower()}_{crm_owner['Name']}({t}).xlsx")):
+                t = t + 1
+            file_name = f"matches_of_{datetime.now().strftime('%b_%Y').lower()}_{crm_owner['Name']}({t}).xlsx"
+            file_path = os.path.join(full_folder_path, file_name)
+
+        print(f"Final file path: {file_path}")
+        
+        retries = 0
+        # Convert environment variable to integer with a default value
+        max_retries = int(os.getenv("Excel_MAX_RETRIES", "5"))  # Default to 5 if not set
+
+        while is_file_open(file_path) and retries < max_retries:
+            print(f"File '{file_path}' is in use. Retrying in 2 seconds...")
+            time.sleep(2)  # Wait for 2 seconds before retrying
+            retries += 1
+
+        if retries >= max_retries:
+            print(f"File '{file_path}' is still locked after {max_retries} attempts. Please close it.")
+            return False
+
+        # Save the Excel file
+        try:
+            # Always create a new file to avoid complications
+            with pd.ExcelWriter(file_path, engine='openpyxl', mode='w') as writer:
                 df.to_excel(writer, index=False, header=True, sheet_name="Sheet1")
-        else:
-            # For new files, don't use if_sheet_exists
-            with pd.ExcelWriter(file_path, engine='openpyxl', mode=mode) as writer:
-                df.to_excel(writer, index=False, header=True, sheet_name="Sheet1")
+            
+            print(f"Excel file created successfully: {file_path}")
+            
+            # Verify the file was created and has content
+            if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
+                print(f"File verified - Size: {os.path.getsize(file_path)} bytes")
+                
+                # Send email with attachment
+                email_sent = send_email_with_attachment(crm_owner, file_path)
+                if email_sent:
+                    print(f"Data saved and emailed successfully for {crm_owner['Name']} in {file_path}")
+                    return True
+                else:
+                    print(f"File saved but email failed for {crm_owner['Name']}")
+                    return False
+            else:
+                print(f"File was not created or is empty: {file_path}")
+                return False
 
-        send_email_with_attachment(crm_owner, file_path)
-
-        print(f"Data saved successfully for {crm_owner['Name']} in {file_path}")
-
+        except Exception as e:
+            print(f"Error creating Excel file for {crm_owner['Name']}: {e}")
+            return False
+            
     except Exception as e:
-        print(f"Error saving {crm_owner['Name']}'s data to Excel: {e}")
+        print(f"Error in save_to_excel for {crm_owner['Name']}: {e}")
+        return False
         
 def authenticate_datatree():
     """
@@ -699,11 +739,21 @@ def process_crm_owner(CRM_owner, result_queue):
     """
     Fetch contacts and start searches, tracking seen properties per CRM owner.
     """
+    print(f"Processing CRM owner: {CRM_owner['Name']}")
+    
     contacts = fetch_all_contacts(CRM_owner['token'])
+    print(f"Fetched {len(contacts)} contacts for {CRM_owner['Name']}")
+    
+    if not contacts:
+        print(f"No contacts found for {CRM_owner['Name']}")
+        return
+    
     MAX_THREADS=10
     contact_threads = []
     contact_result_queue = queue.Queue()
     states_counties = CRM_owner.get("states_counties", [])
+    
+    print(f"States/Counties for {CRM_owner['Name']}: {states_counties}")
     
     def search_for_contact_wrapper(contact, contact_result_queue, CRM_owner, states_counties):
         """Wrapper function to process Contact and store results."""
@@ -718,21 +768,28 @@ def process_crm_owner(CRM_owner, result_queue):
             try:
                 future.result()  # Raise exceptions if any occur in threads
             except Exception as e:
-                print(f"(X) Error processing contact for {CRM_owner['Name']}: {e}")
+                print(f"(X) Error processing contact {contact.get('name', 'Unknown')} for {CRM_owner['Name']}: {e}")
 
     # Collect and save updated property IDs for this CRM owner
     owner_results = []
     while not contact_result_queue.empty():
         owner_results.extend(contact_result_queue.get())
 
-    print(f"Collected owner_results for {CRM_owner['Name']}: {owner_results}")
+    print(f"Collected {len(owner_results)} results for {CRM_owner['Name']}")
+    print(f"Sample results: {owner_results[:2] if owner_results else 'None'}")
 
     # Save only this owner's updated `seen_property_ids`
     save_seen_property_ids(CRM_owner)
 
     if owner_results:
         result_queue.put((CRM_owner['Name'], owner_results))
-        save_to_excel(owner_results, CRM_owner)
+        success = save_to_excel(owner_results, CRM_owner)
+        if success:
+            print(f"Successfully processed and saved data for {CRM_owner['Name']}")
+        else:
+            print(f"Failed to save data for {CRM_owner['Name']}")
+    else:
+        print(f"No results to save for {CRM_owner['Name']}")
 
 def search_for_contact(contact, contact_result_queue, crm_owner, states_counties):
     """

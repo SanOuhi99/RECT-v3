@@ -244,6 +244,7 @@ def save_property_to_seen_properties(crm_owner_id, property_data, contact_detail
             contact_middle_name=contact_details.get("middle_name"),
             name_variation=property_data.get("Name Variation"),
             contract_date=contract_date  # Save the parsed contract date
+            created_at = datetime.now().strftime('%Y-%m-%d')
         )
         
         db.add(seen_property)
@@ -331,6 +332,7 @@ def send_email_with_attachment(crm_owner, file_path):
 def save_to_excel(data_to_be_saved, crm_owner):
     """
     Save the collected data to an Excel file, handling file permission errors.
+    Creates a folder with current month name and saves files there.
     """
     t = 1 
     if not data_to_be_saved:
@@ -338,15 +340,26 @@ def save_to_excel(data_to_be_saved, crm_owner):
         return
 
     df = pd.DataFrame(data_to_be_saved)
-    file_path = f"matches_of_{datetime.now().strftime('%b_%Y').lower()}_{crm_owner['Name']}.xlsx"
+    
+    # Create folder with current month name
+    current_month_folder = datetime.now().strftime('%B_%Y')  # e.g., "August_2025"
+    os.makedirs(current_month_folder, exist_ok=True)  # Create folder if it doesn't exist
+    print(f"Created/Using folder: {current_month_folder}")
+    
+    # Create file path within the month folder
+    file_name = f"matches_of_{datetime.now().strftime('%b_%Y').lower()}_{crm_owner['Name']}.xlsx"
+    file_path = os.path.join(current_month_folder, file_name)
+    
+    # Handle file naming conflicts
     if os.path.exists(file_path):
-        file_path = f"matches_of_{datetime.now().strftime('%b_%Y').lower()}_{crm_owner['Name']}({t}).xlsx"
-        while os.path.exists(f"matches_of_{datetime.now().strftime('%b_%Y').lower()}_{crm_owner['Name']}({t}).xlsx"):
-            file_path = f"matches_of_{datetime.now().strftime('%b_%Y').lower()}_{crm_owner['Name']}({t}).xlsx"
-            t = t+1
+        while os.path.exists(os.path.join(current_month_folder, f"matches_of_{datetime.now().strftime('%b_%Y').lower()}_{crm_owner['Name']}({t}).xlsx")):
+            t = t + 1
+        file_name = f"matches_of_{datetime.now().strftime('%b_%Y').lower()}_{crm_owner['Name']}({t}).xlsx"
+        file_path = os.path.join(current_month_folder, file_name)
 
     retries = 0
-    max_retries = os.getenv("Excel_MAX_RETRIES")  # Maximum attempts to access the file
+    # Convert environment variable to integer with a default value
+    max_retries = int(os.getenv("Excel_MAX_RETRIES", "5"))  # Default to 5 if not set
 
     while is_file_open(file_path) and retries < max_retries:
         print(f"File '{file_path}' is in use. Retrying in 2 seconds...")

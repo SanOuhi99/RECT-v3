@@ -721,7 +721,7 @@ const AgentDashboard = () => {
                   ) : 'Refresh'}
                 </button>
               </div>
-        
+          
               {properties.length === 0 ? (
                 <div className="text-center py-12">
                   <div className="text-6xl text-gray-300 mb-4">🏠</div>
@@ -729,45 +729,97 @@ const AgentDashboard = () => {
                   <p className="text-gray-500">Your property matches will appear here when found.</p>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {properties.map((property) => (
-                    <div 
-                      key={property.id} 
-                      className="property-card bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                      onClick={() => {
-                        setSelectedProperty(property);
-                        setIsPropertyOpen(true);
-                      }}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <h4 className="font-medium text-gray-900">
-                            {property.street_address || 'Address not available'}
-                          </h4>
-                          <div className="flex flex-wrap gap-2 mt-1">
-                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                  {/* Table Header */}
+                  <div className="bg-gray-50 px-6 py-3 border-b border-gray-200">
+                    <div className="grid grid-cols-12 gap-4 text-sm font-medium text-gray-700">
+                      <div className="col-span-4">Address</div>
+                      <div className="col-span-2">Location</div>
+                      <div className="col-span-2">Owner</div>
+                      <div className="col-span-1">Match</div>
+                      <div className="col-span-2">Date</div>
+                      <div className="col-span-1">Status</div>
+                    </div>
+                  </div>
+                  
+                  {/* Properties List */}
+                  <div className="divide-y divide-gray-200">
+                    {properties.map((property) => (
+                      <div 
+                        key={property.id} 
+                        className="px-6 py-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                        onClick={() => {
+                          setSelectedProperty(property);
+                          setIsPropertyOpen(true);
+                        }}
+                      >
+                        <div className="grid grid-cols-12 gap-4 items-center text-sm">
+                          {/* Address */}
+                          <div className="col-span-4">
+                            <p className="font-medium text-gray-900 truncate">
+                              {property.street_address || 'Address not available'}
+                            </p>
+                            <p className="text-xs text-gray-500 truncate">
+                              ID: {property.property_id}
+                            </p>
+                          </div>
+                          
+                          {/* Location */}
+                          <div className="col-span-2">
+                            <p className="text-gray-900 truncate">
                               {property.county}, {property.state}
-                            </span>
-                            {property.match_percentage && (
+                            </p>
+                          </div>
+                          
+                          {/* Owner */}
+                          <div className="col-span-2">
+                            <p className="text-gray-900 truncate">
+                              {property.owner_name || property.seller_name || 'N/A'}
+                            </p>
+                          </div>
+                          
+                          {/* Match Percentage */}
+                          <div className="col-span-1">
+                            {property.match_percentage ? (
                               <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                                Match: {property.match_percentage}
+                                {property.match_percentage}
                               </span>
-                            )}
-                            {property.match_field && (
-                              <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
-                                {property.match_field}
-                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
                             )}
                           </div>
-                        </div>
-                        <div className="text-right">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPropertyStatusColor(property)}`}>
-                            {getDaysAgoLabel(property)}
-                          </span>
+                          
+                          {/* Date */}
+                          <div className="col-span-2">
+                            <p className="text-gray-900 text-xs">
+                              {property.contract_date 
+                                ? new Date(property.contract_date).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric'
+                                  })
+                                : new Date(property.created_at).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric'
+                                  })
+                              }
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {property.contract_date ? 'Contract' : 'Added'}
+                            </p>
+                          </div>
+                          
+                          {/* Status */}
+                          <div className="col-span-1">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPropertyStatusColor(property)}`}>
+                              {getDaysAgo(property) === 0 ? 'New' : `${getDaysAgo(property)}d`}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

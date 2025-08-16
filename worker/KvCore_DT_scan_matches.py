@@ -42,6 +42,7 @@ def should_run_this_month():
     # Read from last_run_month.txt file
     try:
         file_path = os.path.join(DATA_DIR, "last_run_month.txt")
+        print("cheking {file_path}")
         with open(file_path, "r") as f:
             last_run_month = int(f.read().strip())
     except FileNotFoundError:

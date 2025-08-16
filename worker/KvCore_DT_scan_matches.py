@@ -127,7 +127,9 @@ class SeenProperties(Base):
     contact_last_name = Column(String)
     contact_middle_name = Column(String)
     name_variation = Column(String)
-    contract_date = Column(DateTime)  # New column for sale date
+    contract_date = Column(DateTime)
+    match_percentage = Column(Integer)  # New column for match percentage
+    match_field = Column(String)       # New column for match field (Owner/Seller)
     created_at = Column(DateTime, server_default=func.now())
 
 # Create database session
@@ -218,10 +220,8 @@ def save_property_to_seen_properties(crm_owner_id, property_data, contact_detail
         contract_date = None
         if property_data.get("Contract Date"):
             try:
-                # Parse the ISO format date string to datetime object
                 contract_date_str = property_data.get("Contract Date")
                 if contract_date_str:
-                    # Handle different date formats
                     if 'T' in contract_date_str:
                         contract_date = datetime.fromisoformat(contract_date_str.replace('T', ' ').replace('Z', ''))
                     else:
@@ -229,6 +229,9 @@ def save_property_to_seen_properties(crm_owner_id, property_data, contact_detail
             except (ValueError, AttributeError) as e:
                 print(f"Error parsing contract date '{property_data.get('Contract Date')}': {e}")
                 contract_date = None
+        
+        # Extract match percentage (remove % sign if present)
+        match_percentage = property_data.get("Match Percentage", "0%").replace('%', '')
         
         seen_property = SeenProperties(
             crm_owner_id=crm_owner_id,
@@ -243,13 +246,15 @@ def save_property_to_seen_properties(crm_owner_id, property_data, contact_detail
             contact_last_name=contact_details.get("last_name"),
             contact_middle_name=contact_details.get("middle_name"),
             name_variation=property_data.get("Name Variation"),
-            contract_date=contract_date,  # Save the parsed contract date
-            created_at=datetime.now()  # Set when the data was fetched (as datetime object, not string)
+            contract_date=contract_date,
+            match_percentage=int(match_percentage),  # Save as integer
+            match_field=property_data.get("Match Field", "Unknown"),  # Save match field
+            created_at=datetime.now()
         )
         
         db.add(seen_property)
         db.commit()
-        print(f"Saved property {property_data.get('Property ID')} with contract date {contract_date} to seen_properties table")
+        print(f"Saved property {property_data.get('Property ID')} with match details to seen_properties table")
         
     except Exception as e:
         print(f"Error saving property to seen_properties table: {e}")

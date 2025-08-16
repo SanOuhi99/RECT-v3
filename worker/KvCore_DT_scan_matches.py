@@ -750,13 +750,13 @@ def get_overall_match_score(contact_details, property_details):
     # Calculate match for owner names
     owner_match = calculate_name_match_percentage(contact_details, owner_names, "owner")
     
+    # Calculate match for seller name
+    seller_match = calculate_name_match_percentage(contact_details, seller_name, "seller")
+
     # Debug logging to see both scores
     print(f"    Owner Match: {owner_match['percentage']}% - '{owner_names}'")
     print(f"    Seller Match: {seller_match['percentage']}% - '{seller_name}'")
 
-    # Calculate match for seller name
-    seller_match = calculate_name_match_percentage(contact_details, seller_name, "seller")
-    
     # Return the best match
     if owner_match["percentage"] > seller_match["percentage"]:
         owner_match["field_matched"] = "Owner"

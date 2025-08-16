@@ -29,7 +29,7 @@ from fuzzywuzzy import fuzz
 # Load environment variables
 load_dotenv()
 
-file_path = os.path.join(DATA_DIR, "last_run_month.txt")
+
 def should_run_this_month():
     today = datetime.today()
     current_month = today.month
@@ -144,7 +144,7 @@ def get_db():
         pass  # Don't close here, close manually when done
 
 DATA_DIR = "/worker"
-
+file_path = os.path.join(DATA_DIR, "last_run_month.txt")
 DATATREE_BASE_URL = "https://dtapiuat.datatree.com"
 AUTH_ENDPOINT = "/api/Login/AuthenticateClient"
 FETCH_REPORT_ENDPOINT = "/api/Report/GetReport"

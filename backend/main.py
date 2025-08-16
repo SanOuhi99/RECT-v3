@@ -158,7 +158,9 @@ class SeenProperties(Base):
     contact_last_name = Column(String)
     contact_middle_name = Column(String)
     name_variation = Column(String)
-    contract_date = Column(DateTime, nullable=True)  # Add this field
+    contract_date = Column(DateTime)
+    match_percentage = Column(Integer)  
+    match_field = Column(String)
     created_at = Column(DateTime, server_default=func.now())
 
 # Create tables (run once at startup)

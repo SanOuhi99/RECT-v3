@@ -956,6 +956,32 @@ def get_detailed_analytics(
         ]
     }
 
+@app.delete("/seen_properties/{property_id}")
+def delete_seen_property(
+    property_id: int,
+    current_user: CrmOwner = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a seen property for the current user
+    """
+    # Verify the property belongs to the current user
+    property = db.query(SeenProperties).filter(
+        SeenProperties.id == property_id,
+        SeenProperties.crm_owner_id == current_user.id
+    ).first()
+    
+    if not property:
+        raise HTTPException(status_code=404, detail="Property not found or doesn't belong to you")
+    
+    try:
+        db.delete(property)
+        db.commit()
+        return {"message": "Property deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete property")
+
 @app.get("/user/activity-summary")
 def get_user_activity_summary(
     current_user: CrmOwner = Depends(get_current_user),

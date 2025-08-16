@@ -2,6 +2,25 @@ import os
 import psycopg2
 from psycopg2 import sql
 
+database_url = os.getenv("DATABASE_URL")
+table_name = os.getenv("TABLENAME")
+
+def change_field_type():
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+    cur = conn.cursor()
+    
+    cur.execute("""
+    ALTER TABLE seen_properties
+    ALTER COLUMN match_field TYPE TEXT
+    USING match_field::TEXT;
+    """)
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("Column type updated successfully ✅")
+
+
 def truncate_table():
     database_url = os.getenv("DATABASE_URL")
     table_name = os.getenv("TABLENAME")
@@ -26,4 +45,4 @@ def truncate_table():
             conn.close()
 
 if __name__ == "__main__":
-    truncate_table()
+    change_field_type()

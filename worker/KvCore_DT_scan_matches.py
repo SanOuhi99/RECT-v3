@@ -41,15 +41,16 @@ def should_run_this_month():
 
     # Read from last_run_month.txt file
     try:
-        with open("last_run_month.txt", "r") as f:
+        file_path = os.path.join(DATA_DIR, "last_run_month.txt")
+        with open(file_path, "r") as f:
             last_run_month = int(f.read().strip())
     except FileNotFoundError:
         # If file doesn't exist, create it with current month
-        with open("last_run_month.txt", "w") as f:
+        with open(file_path, "w") as f:
             f.write(str(current_month))
         return True  # First run
     except Exception as e:
-        print(f"Error reading last_run_month.txt: {e}")
+        print(f"Error reading {file_path}: {e}")
         return False
 
     if current_month == last_run_month:
@@ -141,7 +142,7 @@ def get_db():
     finally:
         pass  # Don't close here, close manually when done
 
-DATA_DIR = "/app/data"
+DATA_DIR = "/worker/app/data"
 
 DATATREE_BASE_URL = "https://dtapiuat.datatree.com"
 AUTH_ENDPOINT = "/api/Login/AuthenticateClient"

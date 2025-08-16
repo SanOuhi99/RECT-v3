@@ -34,7 +34,8 @@ def should_run_this_month():
     current_month = today.month
 
     # Check if it's a weekday (Mon-Fri)
-    if today.weekday() > 4:  # 5 and 6 are Saturday and Sunday
+    last_weekday = os.getenv("LAST_WEEKDAY",4)
+    if today.weekday() > last_weekday:  # 5 and 6 are Saturday and Sunday
         print(f"Today is weekend ({today.weekday()}), not running.")
         return False
 

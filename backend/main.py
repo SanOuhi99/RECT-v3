@@ -430,7 +430,9 @@ class SeenPropertyOut(BaseModel):
     contact_last_name: Optional[str] = None
     contact_middle_name: Optional[str] = None
     name_variation: Optional[str] = None
-    contract_date: Optional[datetime] = None  # Add this field
+    contract_date: Optional[datetime] = None
+    match_percentage: Optional[int] = None
+    match_field: Optional[str] = None
     created_at: datetime
 
     @validator('property_id', pre=True)

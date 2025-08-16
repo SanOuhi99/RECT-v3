@@ -63,7 +63,7 @@ def should_run_this_month():
 def update_last_run_month():
     current_month = datetime.today().month
     try:
-        with open("last_run_month.txt", "w") as f:
+        with open(file_path, "w") as f:
             f.write(str(current_month))
         print(f"(✓) Updated last_run_month.txt to {current_month}")
     except Exception as e:
@@ -143,7 +143,7 @@ def get_db():
     finally:
         pass  # Don't close here, close manually when done
 
-DATA_DIR = "/worker/app/data"
+DATA_DIR = "/worker"
 
 DATATREE_BASE_URL = "https://dtapiuat.datatree.com"
 AUTH_ENDPOINT = "/api/Login/AuthenticateClient"

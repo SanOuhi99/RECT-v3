@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import Navbar from '../components/Navbar';
+import { Dialog, Transition } from '@headlessui/react';
+import { toast } from 'react-toastify';
 
 const AgentDashboard = () => {
   const [properties, setProperties] = useState([]);
@@ -14,6 +16,11 @@ const AgentDashboard = () => {
   const [error, setError] = useState('');
   const [lastRefresh, setLastRefresh] = useState(null);
   const [sessionStartTime, setSessionStartTime] = useState(null);
+
+  // New states for property modal
+  const [selectedProperty, setSelectedProperty] = useState(null);
+  const [isPropertyOpen, setIsPropertyOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Enhanced profile editing state
   const [statesData, setStatesData] = useState([]);
@@ -40,7 +47,34 @@ const AgentDashboard = () => {
   } = useAuth();
   
   const navigate = useNavigate();
+  const handleDeleteProperty = async (propertyId) => {
+    if (!window.confirm('Are you sure you want to remove this property from your list?')) {
+      return;
+    }
 
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`${API_URL}/seen_properties/${propertyId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        setProperties(properties.filter(prop => prop.id !== propertyId));
+        toast.success('Property removed successfully');
+      } else {
+        throw new Error('Failed to delete property');
+      }
+    } catch (error) {
+      console.error('Error deleting property:', error);
+      toast.error('Failed to remove property');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
   // Enhanced data loading functions
   const loadStatesData = useCallback(async () => {
     try {
@@ -667,7 +701,7 @@ const AgentDashboard = () => {
             </div>
           )}
 
-          {/* Properties Tab */}
+          /* Properties Tab */
           {activeTab === 'properties' && (
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
@@ -684,12 +718,10 @@ const AgentDashboard = () => {
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                       Loading...
                     </>
-                  ) : (
-                    'Refresh'
-                  )}
+                  ) : 'Refresh'}
                 </button>
               </div>
-
+        
               {properties.length === 0 ? (
                 <div className="text-center py-12">
                   <div className="text-6xl text-gray-300 mb-4">🏠</div>
@@ -697,86 +729,42 @@ const AgentDashboard = () => {
                   <p className="text-gray-500">Your property matches will appear here when found.</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {properties.map((property) => (
-                    <div key={property.id} className="property-card bg-white rounded-lg p-6 shadow-md">
-                      <div className="flex justify-between items-start mb-4">
-                        <div>
-                          <h4 className="text-lg font-bold text-gray-900">
+                    <div 
+                      key={property.id} 
+                      className="property-card bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                      onClick={() => {
+                        setSelectedProperty(property);
+                        setIsPropertyOpen(true);
+                      }}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <h4 className="font-medium text-gray-900">
                             {property.street_address || 'Address not available'}
                           </h4>
-                          <p className="text-gray-600">
-                            {property.county}, {property.state}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
-                            ID: {property.property_id}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      <div className="grid md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                          <p className="text-sm text-gray-600">Owner Name</p>
-                          <p className="font-medium">{property.owner_name || 'N/A'}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-600">Seller Name</p>
-                          <p className="font-medium">{property.seller_name || 'N/A'}</p>
-                        </div>
-                      </div>
-
-                      {/* Date Information */}
-                      <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-                        <div className="grid md:grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-sm text-gray-600 mb-1">System Date</p>
-                            <p className="font-medium">{formatDate(property.created_at)}</p>
-                            <p className="text-xs text-green-600">
-                              {getDaysAgo({created_at: property.created_at})} days ago
-                            </p>
-                          </div>
-                          {property.contract_date && (
-                            <div className="p-3 bg-blue-50 rounded-lg">
-                              <p className="text-sm text-blue-600 mb-1">Contract Date</p>
-                              <p className="font-medium">{formatDate(property.contract_date)}</p>
-                              <p className="text-xs text-blue-600">
-                                {getDaysAgo({contract_date: property.contract_date})} days ago
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {(property.contact_email || property.contact_first_name) && (
-                        <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-                          <p className="text-sm text-gray-600 mb-2">Contact Information</p>
-                          <div className="grid md:grid-cols-2 gap-4">
-                            <div>
-                              <p className="font-medium">
-                                {[property.contact_first_name, property.contact_middle_name, property.contact_last_name]
-                                  .filter(Boolean)
-                                  .join(' ') || 'N/A'}
-                              </p>
-                              {property.contact_email && (
-                                <p className="text-sm text-blue-600">{property.contact_email}</p>
-                              )}
-                            </div>
-                            {property.name_variation && (
-                              <div>
-                                <p className="text-sm text-gray-600">Name Variation</p>
-                                <p className="font-medium">{property.name_variation}</p>
-                              </div>
+                          <div className="flex flex-wrap gap-2 mt-1">
+                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                              {property.county}, {property.state}
+                            </span>
+                            {property.match_percentage && (
+                              <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                                Match: {property.match_percentage}
+                              </span>
+                            )}
+                            {property.match_field && (
+                              <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
+                                {property.match_field}
+                              </span>
                             )}
                           </div>
                         </div>
-                      )}
-
-                      <div className="flex justify-between items-center pt-4 border-t border-gray-200">
-                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getPropertyStatusColor(property)}`}>
-                          {getDaysAgoLabel(property)}
-                        </span>
+                        <div className="text-right">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPropertyStatusColor(property)}`}>
+                            {getDaysAgoLabel(property)}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1128,6 +1116,153 @@ const AgentDashboard = () => {
           )}
         </div>
       </div>
+      <Transition appear show={isPropertyOpen} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={() => setIsPropertyOpen(false)}>
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-black bg-opacity-25" />
+          </Transition.Child>
+      
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4 text-center">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-300"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="ease-in duration-200"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="w-full max-w-2xl transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
+                  {selectedProperty && (
+                    <>
+                      <Dialog.Title
+                        as="h3"
+                        className="text-lg font-medium leading-6 text-gray-900"
+                      >
+                        Property Details
+                      </Dialog.Title>
+                      
+                      <div className="mt-4 space-y-4">
+                        <div className="grid md:grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-600">Property ID</p>
+                            <p className="font-medium">{selectedProperty.property_id}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Address</p>
+                            <p className="font-medium">{selectedProperty.street_address || 'N/A'}</p>
+                          </div>
+                        </div>
+      
+                        <div className="grid md:grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-600">County</p>
+                            <p className="font-medium">{selectedProperty.county || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">State</p>
+                            <p className="font-medium">{selectedProperty.state || 'N/A'}</p>
+                          </div>
+                        </div>
+      
+                        <div className="grid md:grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-600">Owner Name</p>
+                            <p className="font-medium">{selectedProperty.owner_name || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Seller Name</p>
+                            <p className="font-medium">{selectedProperty.seller_name || 'N/A'}</p>
+                          </div>
+                        </div>
+      
+                        <div className="grid md:grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-600">Match Percentage</p>
+                            <p className="font-medium">{selectedProperty.match_percentage || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Match Field</p>
+                            <p className="font-medium">{selectedProperty.match_field || 'N/A'}</p>
+                          </div>
+                        </div>
+      
+                        <div className="grid md:grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-600">System Date</p>
+                            <p className="font-medium">{formatDate(selectedProperty.created_at)}</p>
+                          </div>
+                          {selectedProperty.contract_date && (
+                            <div>
+                              <p className="text-sm text-gray-600">Contract Date</p>
+                              <p className="font-medium">{formatDate(selectedProperty.contract_date)}</p>
+                            </div>
+                          )}
+                        </div>
+      
+                        {(selectedProperty.contact_email || selectedProperty.contact_first_name) && (
+                          <div className="p-4 bg-gray-50 rounded-lg">
+                            <p className="text-sm text-gray-600 mb-2">Contact Information</p>
+                            <div className="grid md:grid-cols-2 gap-4">
+                              <div>
+                                <p className="font-medium">
+                                  {[selectedProperty.contact_first_name, selectedProperty.contact_middle_name, selectedProperty.contact_last_name]
+                                    .filter(Boolean)
+                                    .join(' ') || 'N/A'}
+                                </p>
+                                {selectedProperty.contact_email && (
+                                  <p className="text-sm text-blue-600">{selectedProperty.contact_email}</p>
+                                )}
+                              </div>
+                              {selectedProperty.name_variation && (
+                                <div>
+                                  <p className="text-sm text-gray-600">Name Variation</p>
+                                  <p className="font-medium">{selectedProperty.name_variation}</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+      
+                      <div className="mt-6 flex justify-between">
+                        <button
+                          type="button"
+                          className="inline-flex justify-center rounded-md border border-transparent bg-red-100 px-4 py-2 text-sm font-medium text-red-900 hover:bg-red-200 focus:outline-none"
+                          onClick={() => {
+                            handleDeleteProperty(selectedProperty.id);
+                            setIsPropertyOpen(false);
+                          }}
+                          disabled={isDeleting}
+                        >
+                          {isDeleting ? 'Removing...' : 'Remove Property'}
+                        </button>
+                        
+                        <button
+                          type="button"
+                          className="inline-flex justify-center rounded-md border border-transparent bg-blue-100 px-4 py-2 text-sm font-medium text-blue-900 hover:bg-blue-200 focus:outline-none"
+                          onClick={() => setIsPropertyOpen(false)}
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
     </div>
   );
 };

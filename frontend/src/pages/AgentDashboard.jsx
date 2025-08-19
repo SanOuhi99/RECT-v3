@@ -701,17 +701,17 @@ const AgentDashboard = () => {
             </div>
           )}
 
-          /* Properties Tab */
+          {/* Properties Tab */}
           {activeTab === 'properties' && (
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-2xl font-bold text-gray-900">
+            <div className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                <h3 className="text-xl sm:text-2xl font-bold text-gray-900">
                   Your Properties ({properties.length})
                 </h3>
                 <button
                   onClick={handleManualRefresh}
                   disabled={loading}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center"
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center self-stretch sm:self-auto justify-center"
                 >
                   {loading ? (
                     <>
@@ -730,8 +730,8 @@ const AgentDashboard = () => {
                 </div>
               ) : (
                 <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-                  {/* Table Header */}
-                  <div className="bg-gray-50 px-6 py-3 border-b border-gray-200">
+                  {/* Desktop Table Header - Hidden on mobile */}
+                  <div className="hidden sm:block bg-gray-50 px-6 py-3 border-b border-gray-200">
                     <div className="grid grid-cols-12 gap-4 text-sm font-medium text-gray-700">
                       <div className="col-span-4">Address</div>
                       <div className="col-span-2">Location</div>
@@ -747,13 +747,79 @@ const AgentDashboard = () => {
                     {properties.map((property) => (
                       <div 
                         key={property.id} 
-                        className="px-6 py-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                        className="px-4 sm:px-6 py-4 hover:bg-gray-50 cursor-pointer transition-colors"
                         onClick={() => {
                           setSelectedProperty(property);
                           setIsPropertyOpen(true);
                         }}
                       >
-                        <div className="grid grid-cols-12 gap-4 items-center text-sm">
+                        {/* Mobile View */}
+                        <div className="sm:hidden">
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex-1">
+                              <p className="font-medium text-gray-900 truncate">
+                                {property.street_address || 'Address not available'}
+                              </p>
+                              <p className="text-xs text-gray-500 truncate">
+                                ID: {property.property_id}
+                              </p>
+                            </div>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPropertyStatusColor(property)} ml-2`}>
+                              {getDaysAgo(property) === 0 ? 'New' : `${getDaysAgo(property)}d`}
+                            </span>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div>
+                              <p className="text-gray-600">Location</p>
+                              <p className="text-gray-900 truncate">
+                                {property.county}, {property.state}
+                              </p>
+                            </div>
+                            
+                            <div>
+                              <p className="text-gray-600">Owner</p>
+                              <p className="text-gray-900 truncate">
+                                {property.owner_name || property.seller_name || 'N/A'}
+                              </p>
+                            </div>
+                            
+                            <div>
+                              <p className="text-gray-600">Match</p>
+                              {property.match_percentage ? (
+                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                                  {property.match_percentage}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400">-</span>
+                              )}
+                            </div>
+                            
+                            <div>
+                              <p className="text-gray-600">Date</p>
+                              <p className="text-gray-900 text-xs">
+                                {property.contract_date 
+                                  ? new Date(property.contract_date).toLocaleDateString('en-US', {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      year: 'numeric'
+                                    })
+                                  : new Date(property.created_at).toLocaleDateString('en-US', {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      year: 'numeric'
+                                    })
+                                }
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {property.contract_date ? 'Contract' : 'Added'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Desktop View */}
+                        <div className="hidden sm:grid sm:grid-cols-12 gap-4 items-center text-sm">
                           {/* Address */}
                           <div className="col-span-4">
                             <p className="font-medium text-gray-900 truncate">

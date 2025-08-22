@@ -35,7 +35,8 @@ const AgentDashboard = () => {
     search: '',
     state: '',
     county: '',
-    dateRange: '',
+    contractBefore: '',
+    contractAfter: '',
     matchPercentage: '',
     hasContract: ''
   });
@@ -59,7 +60,8 @@ const AgentDashboard = () => {
       search: '',
       state: '',
       county: '',
-      dateRange: '',
+      contractBefore: '',
+      contractAfter: '',
       matchPercentage: '',
       hasContract: ''
     });
@@ -89,19 +91,25 @@ const AgentDashboard = () => {
       filtered = filtered.filter(property => property.county === filters.county);
     }
   
-    if (filters.dateRange) {
-      const now = new Date();
+    if (filters.contractBefore || filters.contractAfter) {
       filtered = filtered.filter(property => {
-        const propertyDate = new Date(property.contract_date || property.created_at);
-        const daysDiff = Math.floor((now - propertyDate) / (1000 * 60 * 60 * 24));
+        if (!property.contract_date) return false;
         
-        switch (filters.dateRange) {
-          case 'today': return daysDiff === 0;
-          case 'week': return daysDiff <= 7;
-          case 'month': return daysDiff <= 30;
-          case '3months': return daysDiff <= 90;
-          default: return true;
+        const contractDate = new Date(property.contract_date);
+        
+        if (filters.contractBefore && filters.contractAfter) {
+          const beforeDate = new Date(filters.contractBefore);
+          const afterDate = new Date(filters.contractAfter);
+          return contractDate >= afterDate && contractDate <= beforeDate;
+        } else if (filters.contractBefore) {
+          const beforeDate = new Date(filters.contractBefore);
+          return contractDate <= beforeDate;
+        } else if (filters.contractAfter) {
+          const afterDate = new Date(filters.contractAfter);
+          return contractDate >= afterDate;
         }
+        
+        return true;
       });
     }
   
@@ -967,21 +975,28 @@ const AgentDashboard = () => {
                     </div>
           
                     {/* Date Range */}
+                    {/* Contract After */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
-                      <select
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Contract After</label>
+                      <input
+                        type="date"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                        value={filters.dateRange}
-                        onChange={(e) => setFilters(prev => ({ ...prev, dateRange: e.target.value }))}
-                      >
-                        <option value="">All Time</option>
-                        <option value="today">Today</option>
-                        <option value="week">Last 7 days</option>
-                        <option value="month">Last 30 days</option>
-                        <option value="3months">Last 3 months</option>
-                      </select>
+                        value={filters.contractAfter}
+                        onChange={(e) => setFilters(prev => ({ ...prev, contractAfter: e.target.value }))}
+                      />
                     </div>
-          
+                    
+                    {/* Contract Before */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Contract Before</label>
+                      <input
+                        type="date"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        value={filters.contractBefore}
+                        onChange={(e) => setFilters(prev => ({ ...prev, contractBefore: e.target.value }))}
+                      />
+                    </div>
+                    
                     {/* Match Percentage */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Match Quality</label>
@@ -1049,6 +1064,8 @@ const AgentDashboard = () => {
                       {Object.values(filters).filter(Boolean).length > 0 && (
                         <span>
                           {Object.values(filters).filter(Boolean).length} filter(s) active
+                          {filters.contractAfter && `, After: ${filters.contractAfter}`}
+                          {filters.contractBefore && `, Before: ${filters.contractBefore}`}
                         </span>
                       )}
                     </div>

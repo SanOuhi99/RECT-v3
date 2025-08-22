@@ -635,6 +635,72 @@ const AgentDashboard = () => {
       return dateType === 'contract' ? `Contract ${daysAgo} days ago` : `Added ${daysAgo} days ago`;
     }
   };
+  const exportToJSON = () => {
+    if (filteredProperties.length === 0) {
+      toast.info('No data to export');
+      return;
+    }
+  
+    const dataStr = JSON.stringify(filteredProperties, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const date = new Date().toISOString().split('T')[0];
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `properties_export_${date}.json`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast.success('Data exported successfully');
+  };
+  const exportToCSV = () => {
+    if (filteredProperties.length === 0) {
+      toast.info('No data to export');
+      return;
+    }
+  
+    // Create CSV content
+    const headers = ['Property ID', 'Address', 'County', 'State', 'Owner', 'Seller', 'Match %', 'Contract Date', 'Created Date', 'Status'];
+    
+    const csvContent = [
+      headers.join(','),
+      ...filteredProperties.map(property => {
+        const row = [
+          property.property_id || '',
+          `"${(property.street_address || '').replace(/"/g, '""')}"`,
+          property.county || '',
+          property.state || '',
+          `"${(property.owner_name || '').replace(/"/g, '""')}"`,
+          `"${(property.seller_name || '').replace(/"/g, '""')}"`,
+          property.match_percentage || '',
+          property.contract_date || '',
+          property.created_at || '',
+          getDaysAgoLabel(property)
+        ];
+        return row.join(',');
+      })
+    ].join('\n');
+  
+    // Create download link
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const date = new Date().toISOString().split('T')[0];
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `properties_export_${date}.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast.success('Data exported successfully');
+  };
 
   const getPropertyStatusColor = (property) => {
     const daysAgo = getDaysAgo(property);
@@ -916,6 +982,27 @@ const AgentDashboard = () => {
                     {showFilters ? 'Hide Filters' : 'Show Filters'}
                   </button>
                   
+                  {/* Export Button */}
+                  <button
+                    onClick={exportToCSV}
+                    disabled={filteredProperties.length === 0}
+                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Export CSV
+                  </button>
+                  <button
+                    onClick={exportToJSON}
+                    disabled={filteredProperties.length === 0}
+                    className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors flex items-center"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    Export JSON
+                  </button>
                   <button
                     onClick={handleManualRefresh}
                     disabled={loading}

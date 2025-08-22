@@ -31,7 +31,152 @@ const AgentDashboard = () => {
     county: ''
   });
   const [showPasswordFields, setShowPasswordFields] = useState(false);
-
+  const [filters, setFilters] = useState({
+    search: '',
+    state: '',
+    county: '',
+    dateRange: '',
+    matchPercentage: '',
+    hasContract: ''
+  });
+  const [sortConfig, setSortConfig] = useState({
+    key: 'created_at',
+    direction: 'desc'
+  });
+  const [showFilters, setShowFilters] = useState(false);
+  
+  // Add these helper functions
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+  
+  const resetFilters = () => {
+    setFilters({
+      search: '',
+      state: '',
+      county: '',
+      dateRange: '',
+      matchPercentage: '',
+      hasContract: ''
+    });
+  };
+  
+  // Filter and sort properties
+  const getFilteredAndSortedProperties = () => {
+    let filtered = [...properties];
+  
+    // Apply filters
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      filtered = filtered.filter(property =>
+        (property.street_address?.toLowerCase().includes(searchLower)) ||
+        (property.property_id?.toLowerCase().includes(searchLower)) ||
+        (property.owner_name?.toLowerCase().includes(searchLower)) ||
+        (property.seller_name?.toLowerCase().includes(searchLower)) ||
+        (property.county?.toLowerCase().includes(searchLower))
+      );
+    }
+  
+    if (filters.state) {
+      filtered = filtered.filter(property => property.state === filters.state);
+    }
+  
+    if (filters.county) {
+      filtered = filtered.filter(property => property.county === filters.county);
+    }
+  
+    if (filters.dateRange) {
+      const now = new Date();
+      filtered = filtered.filter(property => {
+        const propertyDate = new Date(property.contract_date || property.created_at);
+        const daysDiff = Math.floor((now - propertyDate) / (1000 * 60 * 60 * 24));
+        
+        switch (filters.dateRange) {
+          case 'today': return daysDiff === 0;
+          case 'week': return daysDiff <= 7;
+          case 'month': return daysDiff <= 30;
+          case '3months': return daysDiff <= 90;
+          default: return true;
+        }
+      });
+    }
+  
+    if (filters.matchPercentage) {
+      filtered = filtered.filter(property => {
+        if (!property.match_percentage) return filters.matchPercentage === 'none';
+        
+        const match = parseInt(property.match_percentage.replace('%', ''));
+        switch (filters.matchPercentage) {
+          case 'high': return match >= 80;
+          case 'medium': return match >= 50 && match < 80;
+          case 'low': return match < 50;
+          case 'none': return false;
+          default: return true;
+        }
+      });
+    }
+  
+    if (filters.hasContract) {
+      filtered = filtered.filter(property => {
+        const hasContract = !!property.contract_date;
+        return filters.hasContract === 'yes' ? hasContract : !hasContract;
+      });
+    }
+  
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aVal, bVal;
+  
+      switch (sortConfig.key) {
+        case 'address':
+          aVal = a.street_address || '';
+          bVal = b.street_address || '';
+          break;
+        case 'location':
+          aVal = `${a.county}, ${a.state}`;
+          bVal = `${b.county}, ${b.state}`;
+          break;
+        case 'owner':
+          aVal = a.owner_name || a.seller_name || '';
+          bVal = b.owner_name || b.seller_name || '';
+          break;
+        case 'match':
+          aVal = a.match_percentage ? parseInt(a.match_percentage.replace('%', '')) : 0;
+          bVal = b.match_percentage ? parseInt(b.match_percentage.replace('%', '')) : 0;
+          break;
+        case 'date':
+          aVal = new Date(a.contract_date || a.created_at);
+          bVal = new Date(b.contract_date || b.created_at);
+          break;
+        case 'created_at':
+        default:
+          aVal = new Date(a.created_at);
+          bVal = new Date(b.created_at);
+          break;
+      }
+  
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  
+    return filtered;
+  };
+  
+  // Get unique values for filter dropdowns
+  const getUniqueStates = () => [...new Set(properties.map(p => p.state))].filter(Boolean).sort();
+  const getUniqueCounties = () => {
+    if (filters.state) {
+      return [...new Set(properties.filter(p => p.state === filters.state).map(p => p.county))].filter(Boolean).sort();
+    }
+    return [...new Set(properties.map(p => p.county))].filter(Boolean).sort();
+  };
+  
+  const filteredProperties = getFilteredAndSortedProperties();
   // Refs to prevent stale closure issues
   const refreshIntervalRef = useRef(null);
   const isInitializedRef = useRef(false);
@@ -742,9 +887,285 @@ const AgentDashboard = () => {
                     </div>
                   </div>
                   
+          {/* Properties Tab */}
+          {activeTab === 'properties' && (
+            <div className="p-4 sm:p-6">
+              {/* Header with Toggle Filters */}
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                <div>
+                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900">
+                    Your Properties ({filteredProperties.length}/{properties.length})
+                  </h3>
+                  {filteredProperties.length !== properties.length && (
+                    <p className="text-sm text-gray-600 mt-1">
+                      Showing {filteredProperties.length} of {properties.length} properties
+                    </p>
+                  )}
+                </div>
+                
+                <div className="flex gap-3 w-full sm:w-auto">
+                  <button
+                    onClick={() => setShowFilters(!showFilters)}
+                    className={`px-4 py-2 rounded-lg transition-colors flex items-center ${
+                      showFilters ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707v4.586l-4-2v-2.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                    </svg>
+                    {showFilters ? 'Hide Filters' : 'Show Filters'}
+                  </button>
+                  
+                  <button
+                    onClick={handleManualRefresh}
+                    disabled={loading}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center"
+                  >
+                    {loading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Loading...
+                      </>
+                    ) : 'Refresh'}
+                  </button>
+                </div>
+              </div>
+          
+              {/* Filters Panel */}
+              {showFilters && (
+                <div className="bg-gray-50 rounded-xl p-6 mb-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-4">
+                    {/* Search */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
+                      <input
+                        type="text"
+                        placeholder="Address, ID, Owner..."
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        value={filters.search}
+                        onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                      />
+                    </div>
+          
+                    {/* State Filter */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">State</label>
+                      <select
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        value={filters.state}
+                        onChange={(e) => setFilters(prev => ({ ...prev, state: e.target.value, county: '' }))}
+                      >
+                        <option value="">All States</option>
+                        {getUniqueStates().map(state => (
+                          <option key={state} value={state}>{state}</option>
+                        ))}
+                      </select>
+                    </div>
+          
+                    {/* County Filter */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">County</label>
+                      <select
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        value={filters.county}
+                        onChange={(e) => setFilters(prev => ({ ...prev, county: e.target.value }))}
+                        disabled={!filters.state}
+                      >
+                        <option value="">All Counties</option>
+                        {getUniqueCounties().map(county => (
+                          <option key={county} value={county}>{county}</option>
+                        ))}
+                      </select>
+                    </div>
+          
+                    {/* Date Range */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
+                      <select
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        value={filters.dateRange}
+                        onChange={(e) => setFilters(prev => ({ ...prev, dateRange: e.target.value }))}
+                      >
+                        <option value="">All Time</option>
+                        <option value="today">Today</option>
+                        <option value="week">Last 7 days</option>
+                        <option value="month">Last 30 days</option>
+                        <option value="3months">Last 3 months</option>
+                      </select>
+                    </div>
+          
+                    {/* Match Percentage */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Match Quality</label>
+                      <select
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        value={filters.matchPercentage}
+                        onChange={(e) => setFilters(prev => ({ ...prev, matchPercentage: e.target.value }))}
+                      >
+                        <option value="">All Matches</option>
+                        <option value="high">High (80%+)</option>
+                        <option value="medium">Medium (50-79%)</option>
+                        <option value="low">Low (&lt;50%)</option>
+                        <option value="none">No Match Data</option>
+                      </select>
+                    </div>
+          
+                    {/* Contract Status */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Contract Status</label>
+                      <select
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        value={filters.hasContract}
+                        onChange={(e) => setFilters(prev => ({ ...prev, hasContract: e.target.value }))}
+                      >
+                        <option value="">All Properties</option>
+                        <option value="yes">Has Contract</option>
+                        <option value="no">No Contract</option>
+                      </select>
+                    </div>
+          
+                    {/* Sort By */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
+                      <select
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        value={sortConfig.key}
+                        onChange={(e) => setSortConfig(prev => ({ ...prev, key: e.target.value }))}
+                      >
+                        <option value="created_at">Date Added</option>
+                        <option value="date">Contract Date</option>
+                        <option value="address">Address</option>
+                        <option value="location">Location</option>
+                        <option value="owner">Owner</option>
+                        <option value="match">Match %</option>
+                      </select>
+                    </div>
+          
+                    {/* Sort Direction */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Order</label>
+                      <select
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        value={sortConfig.direction}
+                        onChange={(e) => setSortConfig(prev => ({ ...prev, direction: e.target.value }))}
+                      >
+                        <option value="desc">Newest First</option>
+                        <option value="asc">Oldest First</option>
+                      </select>
+                    </div>
+                  </div>
+          
+                  {/* Filter Actions */}
+                  <div className="flex justify-between items-center pt-4 border-t border-gray-200">
+                    <div className="text-sm text-gray-600">
+                      {Object.values(filters).filter(Boolean).length > 0 && (
+                        <span>
+                          {Object.values(filters).filter(Boolean).length} filter(s) active
+                        </span>
+                      )}
+                    </div>
+                    
+                    <button
+                      onClick={resetFilters}
+                      className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                      disabled={Object.values(filters).every(val => !val)}
+                    >
+                      Clear All Filters
+                    </button>
+                  </div>
+                </div>
+              )}
+          
+              {/* Properties List */}
+              {filteredProperties.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="text-6xl text-gray-300 mb-4">
+                    {properties.length === 0 ? '🏠' : '🔍'}
+                  </div>
+                  <h4 className="text-xl font-medium text-gray-600 mb-2">
+                    {properties.length === 0 ? 'No properties yet' : 'No properties match your filters'}
+                  </h4>
+                  <p className="text-gray-500">
+                    {properties.length === 0 
+                      ? 'Your property matches will appear here when found.' 
+                      : 'Try adjusting your filters or clearing them to see more results.'}
+                  </p>
+                  {properties.length > 0 && (
+                    <button
+                      onClick={resetFilters}
+                      className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                      Clear All Filters
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                  {/* Desktop Table Header - Hidden on mobile */}
+                  <div className="hidden sm:block bg-gray-50 px-6 py-3 border-b border-gray-200">
+                    <div className="grid grid-cols-12 gap-4 text-sm font-medium text-gray-700">
+                      <div 
+                        className="col-span-4 flex items-center cursor-pointer hover:text-red-600"
+                        onClick={() => handleSort('address')}
+                      >
+                        Address
+                        {sortConfig.key === 'address' && (
+                          <span className="ml-1">
+                            {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                          </span>
+                        )}
+                      </div>
+                      <div 
+                        className="col-span-2 flex items-center cursor-pointer hover:text-red-600"
+                        onClick={() => handleSort('location')}
+                      >
+                        Location
+                        {sortConfig.key === 'location' && (
+                          <span className="ml-1">
+                            {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                          </span>
+                        )}
+                      </div>
+                      <div 
+                        className="col-span-2 flex items-center cursor-pointer hover:text-red-600"
+                        onClick={() => handleSort('owner')}
+                      >
+                        Owner
+                        {sortConfig.key === 'owner' && (
+                          <span className="ml-1">
+                            {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                          </span>
+                        )}
+                      </div>
+                      <div 
+                        className="col-span-1 flex items-center cursor-pointer hover:text-red-600"
+                        onClick={() => handleSort('match')}
+                      >
+                        Match
+                        {sortConfig.key === 'match' && (
+                          <span className="ml-1">
+                            {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                          </span>
+                        )}
+                      </div>
+                      <div 
+                        className="col-span-2 flex items-center cursor-pointer hover:text-red-600"
+                        onClick={() => handleSort('date')}
+                      >
+                        Date
+                        {sortConfig.key === 'date' && (
+                          <span className="ml-1">
+                            {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="col-span-1">Status</div>
+                    </div>
+                  </div>
+                  
                   {/* Properties List */}
                   <div className="divide-y divide-gray-200">
-                    {properties.map((property) => (
+                    {filteredProperties.map((property) => (
                       <div 
                         key={property.id} 
                         className="px-4 sm:px-6 py-4 hover:bg-gray-50 cursor-pointer transition-colors"

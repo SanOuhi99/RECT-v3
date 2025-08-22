@@ -109,11 +109,19 @@ const AgentDashboard = () => {
       filtered = filtered.filter(property => {
         if (!property.match_percentage) return filters.matchPercentage === 'none';
         
-        const match = parseInt(property.match_percentage.replace('%', ''));
+        let matchValue;
+        if (typeof property.match_percentage === 'string') {
+          matchValue = parseInt(property.match_percentage.replace('%', '')) || 0;
+        } else if (typeof property.match_percentage === 'number') {
+          matchValue = property.match_percentage;
+        } else {
+          return filters.matchPercentage === 'none';
+        }
+        
         switch (filters.matchPercentage) {
-          case 'high': return match >= 80;
-          case 'medium': return match >= 50 && match < 80;
-          case 'low': return match < 50;
+          case 'high': return matchValue >= 80;
+          case 'medium': return matchValue >= 50 && matchValue < 80;
+          case 'low': return matchValue < 50;
           case 'none': return false;
           default: return true;
         }
@@ -145,8 +153,28 @@ const AgentDashboard = () => {
           bVal = b.owner_name || b.seller_name || '';
           break;
         case 'match':
-          aVal = a.match_percentage ? parseInt(a.match_percentage.replace('%', '')) : 0;
-          bVal = b.match_percentage ? parseInt(b.match_percentage.replace('%', '')) : 0;
+          // Handle different data types for match_percentage
+          let aMatchValue = 0;
+          let bMatchValue = 0;
+          
+          if (a.match_percentage) {
+            if (typeof a.match_percentage === 'string') {
+              aMatchValue = parseInt(a.match_percentage.replace('%', '')) || 0;
+            } else if (typeof a.match_percentage === 'number') {
+              aMatchValue = a.match_percentage;
+            }
+          }
+          
+          if (b.match_percentage) {
+            if (typeof b.match_percentage === 'string') {
+              bMatchValue = parseInt(b.match_percentage.replace('%', '')) || 0;
+            } else if (typeof b.match_percentage === 'number') {
+              bMatchValue = b.match_percentage;
+            }
+          }
+          
+          aVal = aMatchValue;
+          bVal = bMatchValue;
           break;
         case 'date':
           aVal = new Date(a.contract_date || a.created_at);

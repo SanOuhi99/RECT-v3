@@ -165,13 +165,6 @@ const RECTLandingPage = () => {
               <a href="#contact" className="nav-link text-gray-700 hover:text-red-600">
                 Contact
               </a>
-              <Link 
-                to="/admin/login"
-                className="nav-link text-gray-700 hover:text-red-600 text-sm"
-              >
-                <i className="fas fa-shield-alt mr-1"></i>
-                Admin
-              </Link>
             </div>
 
             {/* Mobile toggle */}
@@ -196,13 +189,6 @@ const RECTLandingPage = () => {
               <a href="#contact" className="block px-4 py-2 text-gray-700 hover:bg-gray-100">
                 Contact
               </a>
-              <Link
-                to="/admin/login"
-                className="block px-4 py-2 text-gray-700 hover:bg-gray-100"
-                onClick={() => setMobileOpen(false)}
-              >
-                Admin
-              </Link>
             </div>
           )}
         </div>

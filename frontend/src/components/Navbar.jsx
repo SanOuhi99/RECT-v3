@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
 const Navbar = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const location = useLocation();
+  
+  // Check if we're on the landing page (root path)
+  const isLandingPage = location.pathname === '/';
 
   return (
     <nav className="bg-white shadow-sm sticky top-0 z-50">
@@ -13,25 +17,21 @@ const Navbar = () => {
             <span className="text-xl font-bold text-red-600">RECT</span>
           </Link>
 
-          {/* Desktop links */}
-          <div className="hidden md:flex space-x-8">
-            <a href="#features" className="nav-link text-gray-700 hover:text-red-600">
-              Features
-            </a>
-            <a href="#about" className="nav-link text-gray-700 hover:text-red-600">
-              About
-            </a>
-            <a href="#contact" className="nav-link text-gray-700 hover:text-red-600">
-              Contact
-            </a>
-            <Link 
-              to="/admin/login"
-              className="nav-link text-gray-700 hover:text-red-600 text-sm"
-            >
-              <i className="fas fa-shield-alt mr-1"></i>
-              Admin
-            </Link>
-          </div>
+          {/* Desktop links - Only show on landing page */}
+          {isLandingPage && (
+            <div className="hidden md:flex space-x-8">
+              <a href="#features" className="nav-link text-gray-700 hover:text-red-600">
+                Features
+              </a>
+              <a href="#about" className="nav-link text-gray-700 hover:text-red-600">
+                About
+              </a>
+              <a href="#contact" className="nav-link text-gray-700 hover:text-red-600">
+                Contact
+              </a>
+              {/* Admin link removed for security */}
+            </div>
+          )}
 
           {/* Mobile toggle */}
           <button
@@ -42,16 +42,9 @@ const Navbar = () => {
             <i className="fas fa-bars text-gray-700" />
           </button>
         </div>
-        {process.env.NODE_ENV === 'development' && (
-          <Link 
-            to="/admin/login"
-            className="nav-link text-gray-500 text-sm"
-          >
-            Admin
-          </Link>
-        )}
-        {/* Mobile menu */}
-        {mobileOpen && (
+
+        {/* Mobile menu - Only show on landing page */}
+        {isLandingPage && mobileOpen && (
           <div className="md:hidden pb-3">
             <a href="#features" className="block px-4 py-2 text-gray-700 hover:bg-gray-100">
               Features
@@ -62,13 +55,7 @@ const Navbar = () => {
             <a href="#contact" className="block px-4 py-2 text-gray-700 hover:bg-gray-100">
               Contact
             </a>
-            <Link
-              to="/admin/login"
-              className="block px-4 py-2 text-gray-700 hover:bg-gray-100"
-              onClick={() => setMobileOpen(false)}
-            >
-              Admin
-            </Link>
+            {/* Admin link removed for security */}
           </div>
         )}
       </div>

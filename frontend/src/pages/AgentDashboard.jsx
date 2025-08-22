@@ -1262,14 +1262,21 @@ const AgentDashboard = () => {
                               {property.county}, {property.state}
                             </p>
                           </div>
-                          
+
                           {/* Owner */}
                           <div className="col-span-2">
-                            <p className="text-gray-900 truncate">
-                              {property.owner_name || property.seller_name || 'N/A'}
+                            <p className="text-gray-900">
+                              {property.owner_name || 'N/A'}
                             </p>
                           </div>
                           
+                          {/* Seller - NEW COLUMN */}
+                          <div className="col-span-2">
+                            <p className="text-gray-900">
+                              {property.seller_name || 'N/A'}
+                            </p>
+                          </div>
+
                           {/* Match Percentage */}
                           <div className="col-span-1">
                             {property.match_percentage ? (

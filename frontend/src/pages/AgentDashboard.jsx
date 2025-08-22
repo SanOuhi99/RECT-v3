@@ -1175,7 +1175,7 @@ const AgentDashboard = () => {
                         Date
                         {sortConfig.key === 'date' && (
                           <span className="ml-1">
-                            {sortConfig.direction === 'asc' => '↑' : '↓'}
+                            {sortConfig.direction === 'asc' ? '↑' : '↓'}
                           </span>
                         )}
                       </div>

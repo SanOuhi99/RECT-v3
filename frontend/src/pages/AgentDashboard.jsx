@@ -973,7 +973,23 @@ const AgentDashboard = () => {
                         ))}
                       </select>
                     </div>
-          
+                    
+                    {/* Match Percentage */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Match Quality</label>
+                      <select
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        value={filters.matchPercentage}
+                        onChange={(e) => setFilters(prev => ({ ...prev, matchPercentage: e.target.value }))}
+                      >
+                        <option value="">All Matches</option>
+                        <option value="high">High (80%+)</option>
+                        <option value="medium">Medium (50-79%)</option>
+                        <option value="low">Low (&lt;50%)</option>
+                        <option value="none">No Match Data</option>
+                      </select>
+                    </div>
+                    
                     {/* Date Range */}
                     {/* Contract After */}
                     <div>
@@ -995,22 +1011,6 @@ const AgentDashboard = () => {
                         value={filters.contractBefore}
                         onChange={(e) => setFilters(prev => ({ ...prev, contractBefore: e.target.value }))}
                       />
-                    </div>
-                    
-                    {/* Match Percentage */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Match Quality</label>
-                      <select
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                        value={filters.matchPercentage}
-                        onChange={(e) => setFilters(prev => ({ ...prev, matchPercentage: e.target.value }))}
-                      >
-                        <option value="">All Matches</option>
-                        <option value="high">High (80%+)</option>
-                        <option value="medium">Medium (50-79%)</option>
-                        <option value="low">Low (&lt;50%)</option>
-                        <option value="none">No Match Data</option>
-                      </select>
                     </div>
           
                     {/* Contract Status */}

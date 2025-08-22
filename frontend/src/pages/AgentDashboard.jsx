@@ -160,6 +160,10 @@ const AgentDashboard = () => {
           aVal = a.owner_name || a.seller_name || '';
           bVal = b.owner_name || b.seller_name || '';
           break;
+        case 'seller':
+          aVal = a.seller_name || '';
+          bVal = b.seller_name || '';
+          break;
         case 'match':
           // Handle different data types for match_percentage
           let aMatchValue = 0;
@@ -1110,7 +1114,7 @@ const AgentDashboard = () => {
                   <div className="hidden sm:block bg-gray-50 px-6 py-3 border-b border-gray-200">
                     <div className="grid grid-cols-12 gap-4 text-sm font-medium text-gray-700">
                       <div 
-                        className="col-span-4 flex items-center cursor-pointer hover:text-red-600"
+                        className="col-span-3 flex items-center cursor-pointer hover:text-red-600"
                         onClick={() => handleSort('address')}
                       >
                         Address
@@ -1143,6 +1147,17 @@ const AgentDashboard = () => {
                         )}
                       </div>
                       <div 
+                        className="col-span-2 flex items-center cursor-pointer hover:text-red-600"
+                        onClick={() => handleSort('seller')}
+                      >
+                        Seller
+                        {sortConfig.key === 'seller' && (
+                          <span className="ml-1">
+                            {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                          </span>
+                        )}
+                      </div>
+                      <div 
                         className="col-span-1 flex items-center cursor-pointer hover:text-red-600"
                         onClick={() => handleSort('match')}
                       >
@@ -1154,13 +1169,13 @@ const AgentDashboard = () => {
                         )}
                       </div>
                       <div 
-                        className="col-span-2 flex items-center cursor-pointer hover:text-red-600"
+                        className="col-span-1 flex items-center cursor-pointer hover:text-red-600"
                         onClick={() => handleSort('date')}
                       >
                         Date
                         {sortConfig.key === 'date' && (
                           <span className="ml-1">
-                            {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                            {sortConfig.direction === 'asc' => '↑' : '↓'}
                           </span>
                         )}
                       </div>
@@ -1206,7 +1221,14 @@ const AgentDashboard = () => {
                             <div>
                               <p className="text-gray-600">Owner</p>
                               <p className="text-gray-900 truncate">
-                                {property.owner_name || property.seller_name || 'N/A'}
+                                {property.owner_name || 'N/A'}
+                              </p>
+                            </div>
+                            
+                            <div>
+                              <p className="text-gray-600">Seller</p>
+                              <p className="text-gray-900 truncate">
+                                {property.seller_name || 'N/A'}
                               </p>
                             </div>
                             
@@ -1221,7 +1243,7 @@ const AgentDashboard = () => {
                               )}
                             </div>
                             
-                            <div>
+                            <div className="col-span-2">
                               <p className="text-gray-600">Date</p>
                               <p className="text-gray-900 text-xs">
                                 {property.contract_date 
@@ -1246,8 +1268,8 @@ const AgentDashboard = () => {
                         
                         {/* Desktop View */}
                         <div className="hidden sm:grid sm:grid-cols-12 gap-4 items-center text-sm">
-                          {/* Address */}
-                          <div className="col-span-4">
+                          {/* Address - 3 columns */}
+                          <div className="col-span-3">
                             <p className="font-medium text-gray-900 truncate">
                               {property.street_address || 'Address not available'}
                             </p>
@@ -1256,28 +1278,28 @@ const AgentDashboard = () => {
                             </p>
                           </div>
                           
-                          {/* Location */}
+                          {/* Location - 2 columns */}
                           <div className="col-span-2">
                             <p className="text-gray-900 truncate">
                               {property.county}, {property.state}
                             </p>
                           </div>
-
-                          {/* Owner */}
+                          
+                          {/* Owner - 2 columns */}
                           <div className="col-span-2">
-                            <p className="text-gray-900">
+                            <p className="text-gray-900 truncate">
                               {property.owner_name || 'N/A'}
                             </p>
                           </div>
                           
-                          {/* Seller - NEW COLUMN */}
+                          {/* Seller - 2 columns */}
                           <div className="col-span-2">
-                            <p className="text-gray-900">
+                            <p className="text-gray-900 truncate">
                               {property.seller_name || 'N/A'}
                             </p>
                           </div>
-
-                          {/* Match Percentage */}
+                          
+                          {/* Match - 1 column */}
                           <div className="col-span-1">
                             {property.match_percentage ? (
                               <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
@@ -1288,8 +1310,8 @@ const AgentDashboard = () => {
                             )}
                           </div>
                           
-                          {/* Date */}
-                          <div className="col-span-2">
+                          {/* Date - 1 column */}
+                          <div className="col-span-1">
                             <p className="text-gray-900 text-xs">
                               {property.contract_date 
                                 ? new Date(property.contract_date).toLocaleDateString('en-US', {
@@ -1309,7 +1331,7 @@ const AgentDashboard = () => {
                             </p>
                           </div>
                           
-                          {/* Status */}
+                          {/* Status - 1 column */}
                           <div className="col-span-1">
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPropertyStatusColor(property)}`}>
                               {getDaysAgo(property) === 0 ? 'New' : `${getDaysAgo(property)}d`}
